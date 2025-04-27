@@ -19,7 +19,7 @@ export const authController = {
                 return;
             }
 
-            if (role !== "user" && role !== "sub_admin" && role !== "super_admin") {
+            if (role !== "user" && role !== "sub_admin" && role !== "super_admin" && role !== "driver" && role !== "staff") {
                 res.status(400).json({ message: "Invalid role" });
                 return;
             }
@@ -172,7 +172,7 @@ export const authController = {
             console.error("❌ Error logging out:", error);
             res.status(500).json({ message: "Internal server error" });
         }
-    }
+    },
 
 };
 
