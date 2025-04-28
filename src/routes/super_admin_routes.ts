@@ -15,5 +15,11 @@ router.use(roleMiddleware(["super_admin"]));
 
 router.post("/create-sub-company", uploadImage.single("logo"), superAdminController.createCompany);
 router.get("/list-sub-companies", superAdminController.list);
+router.delete("/delete-sub-company/:companyId", superAdminController.deleteCompany);
+router.put("/suspend-sub-company/:companyId", superAdminController.suspendCompany);
+router.put("/activate-sub-company/:companyId", superAdminController.activateCompany);
+router.put("/update-sub-company/:companyId", superAdminController.updateCompany);
+router.get("/view-sub-company-details/:companyId", superAdminController.viewCompanyDetails);
+
 
 export default router;

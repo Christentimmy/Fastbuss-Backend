@@ -40,6 +40,7 @@ export const socketController = {
                 if (!trip || !trip.routeId || !trip.routeId.waypoints) return;
         
                 const isOffRoute = checkRouteDeviation({ latitude, longitude }, trip.routeId.waypoints);
+                
         
                 if (!isOffRoute) {
                     const flag = await redisController.getDeviationFlag(trip._id.toString());

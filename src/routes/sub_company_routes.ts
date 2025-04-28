@@ -48,4 +48,9 @@ router.delete("/delete-staff/:staffId", subCompanyController.deleteStaff);
 router.put("/block-staff/:staffId", subCompanyController.blockStaff);
 router.put("/unblock-staff/:staffId", subCompanyController.unblockStaff);
 
+// Trip Management
+router.put("/update-trip/:tripId", subCompanyController.updateTrip);
+router.put("/cancel-trip/:tripId", subCompanyController.cancelTrip);
+
+
 export default router;

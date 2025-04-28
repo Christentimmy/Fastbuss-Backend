@@ -18,6 +18,7 @@ router.get("/active-trips", subCompanyController.getAllActiveTrips);
 
 // Driver Management - View Only
 router.get("/drivers", subCompanyController.getMyDrivers);
+router.get("/get-trip-history-by-driver/:driverId", subCompanyController.getTripHistoryByDriver);
 router.get("/available-drivers", subCompanyController.getAvailableDrivers);
 router.get("/driver-schedules/:driverId", subCompanyController.getDriverSchedules);
 
@@ -26,5 +27,18 @@ router.get("/all-routes", subCompanyController.getAllRoutesBySubCompany);
 
 // Company Profile - View Only
 router.get("/company-profile", subCompanyController.getCompanyProfile);
+
+// Trip Management - View Only
+router.get("/get-all-schedules", subCompanyController.getAllSchedules);
+router.get("/get-trip-history", subCompanyController.getTripHistory);
+router.get("/get-trip-details/:tripId", subCompanyController.getTripDetails);
+router.get("/get-trip-history-by-bus/:busId", subCompanyController.getTripHistoryByBus);
+router.get("/get-trip-history-by-sub-company", subCompanyController.getTripHistoryBySubCompany);
+
+// Notification Management - View Only
+router.get("/send-bulk-notification", subCompanyController.sendBulkNotification);
+
+
+
 
 export default router; 

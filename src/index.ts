@@ -11,6 +11,10 @@ import userRoutes from "./routes/user_routes";
 import subCompanyRoutes from "./routes/sub_company_routes";
 import staffRoutes from "./routes/staff_routes";
 import { setupSocket } from "./config/socket";
+import driverRoutes from "./routes/driver_routes";
+import bookingRoutes from "./routes/booking_routes";
+import seatRoutes from "./routes/seat_routes";
+import paymentRoutes from "./routes/payment_routes";
 
 dotenv.config();
 
@@ -29,7 +33,10 @@ app.use('/api/v1/super-admin', superAdminRoutes);
 app.use('/api/v1/user', userRoutes);
 app.use('/api/v1/sub-company', subCompanyRoutes);
 app.use('/api/v1/sub-company/staff', staffRoutes);
-
+app.use('/api/v1/driver', driverRoutes);
+app.use('/api/v1/booking', bookingRoutes);
+app.use('/api/v1/seat', seatRoutes);
+app.use('/api/v1/payment', paymentRoutes);
 
 const server = http.createServer(app);
 setupSocket(server);

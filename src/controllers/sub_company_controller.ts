@@ -6,8 +6,11 @@ import { uploadToCloudinary } from "../middlewares/upload_middleware";
 import { Route } from "../models/route_model";
 import { SubCompany } from "../models/sub_company_model"
 import { sendEmail } from "../services/email_service";
-import  sendPushNotification  from "../config/onesignal";
+import sendPushNotification from "../config/onesignal";
 import Trip from "../models/trip_model";
+import { IRoute } from "../types/route_types";
+
+
 
 export const subCompanyController = {
     // ==================== STAFF MANAGEMENT ====================
@@ -693,12 +696,29 @@ export const subCompanyController = {
             res.status(500).json({ message: "Internal server error" });
         }
     },
+ 
+    getTripHistoryByDriver: async (req: Request, res: Response) => {
+        try {
+            const { driverId } = req.params;
+            if (!driverId) {
+                res.status(400).json({ message: "Driver ID is required" });
+                return;
+            }
+            const subCompanyId = res.locals.user.subCompanyId;
+
+            const trips = await Trip.find({ driverId, subCompanyId }).populate<{ routeId: IRoute }>("routeId");
+            res.status(200).json({ message: "Trip history fetched successfully", data: trips });
+        } catch (error) {
+            console.error("Error fetching trip history by driver:", error);
+            res.status(500).json({ message: "Internal server error" });
+        }
+    },
 
 
     // ==================== ROUTE MANAGEMENT ====================
     createRoute: async (req: Request, res: Response) => {
         try {
-            const { routeName, origin, destination, distance, price , waypoints} = req.body;
+            const { routeName, origin, destination, distance, price, waypoints } = req.body;
             const subCompanyId = res.locals.user.subCompanyId;
 
             if (!routeName || !origin || !destination || !price || !distance) {
@@ -871,7 +891,7 @@ export const subCompanyController = {
             if (distance !== undefined) route.distance = distance;
             if (price !== undefined) route.price = price;
             if (status) route.status = status;
-            
+
             await route.save();
             return res.status(200).json({ message: "Route updated successfully", route: route });
         } catch (error) {
@@ -990,5 +1010,301 @@ export const subCompanyController = {
             console.error("Error rescheduling bus:", error);
             res.status(500).json({ message: "Internal server error" });
         }
-    }
+    },
+
+
+    // ==================== TRIP MANAGEMENT ====================
+    getTripHistory: async (req: Request, res: Response) => {
+        try {
+            const subCompanyId = res.locals.user.subCompanyId;
+            const trips = await Trip.find({ subCompanyId });
+            res.status(200).json({ message: "Trip history fetched successfully", data: trips });
+        } catch (error) {
+            console.error("Error fetching trip history:", error);
+            res.status(500).json({ message: "Internal server error" });
+        }
+    },
+
+    getTripDetails: async (req: Request, res: Response) => {
+        try {
+            const { tripId } = req.params;
+            if (!tripId) {
+                res.status(400).json({ message: "Trip ID is required" });
+                return;
+            }
+            const subCompanyId = res.locals.user.subCompanyId;
+
+            const trip = await Trip.findOne({ _id: tripId, subCompanyId }).populate("routeId driverId busId");
+            if (!trip) return res.status(404).json({ message: "Trip not found" });
+            const response = {
+                _id: trip._id,
+                route: trip.routeId, 
+                bus: trip.busId,     
+                driver: trip.driverId, 
+                departureTime: trip.departureTime,
+                arrivalTime: trip.arrivalTime,
+                status: trip.status,
+                subCompanyId: trip.subCompanyId,
+                createdAt: trip.createdAt,
+                updatedAt: trip.updatedAt
+            };
+
+            res.status(200).json({ message: "Trip details fetched successfully", data: response });
+        } catch (error) {
+            console.error("Error fetching trip details:", error);
+            res.status(500).json({ message: "Internal server error" });
+        }
+    },
+
+    cancelTrip: async (req: Request, res: Response) => {
+        try {
+            const { tripId } = req.params;
+            if (!tripId) {
+                res.status(400).json({ message: "Trip ID is required" });
+                return;
+            }
+            const subCompanyId = res.locals.user.subCompanyId;
+
+            const trip = await Trip.findOne({ _id: tripId, subCompanyId }).populate<{ routeId: IRoute }>("routeId");
+            if (!trip) return res.status(404).json({ message: "Trip not found" });
+
+            if (trip.status === "ongoing") {
+                trip.status = "cancelled";
+                await trip.save();
+            }
+
+            const bus = await Bus.findOne({ _id: trip.busId, subCompany: subCompanyId });
+            if (!bus) return res.status(404).json({ message: "Bus not found" });
+
+            bus.status = "inactive";
+            await bus.save();
+
+            const driver = await User.findOne({ _id: trip.driverId, role: "driver", subCompanyId });
+            if (!driver) return res.status(404).json({ message: "Driver not found" });
+
+            driver.status = "inactive";
+            await driver.save();
+
+            const message = `Your trip has been cancelled:<br>Route: ${trip.routeId.routeName} <br>Origin: ${trip.routeId.origin} <br>Destination: ${trip.routeId.destination} <br>Departure Time: ${trip.departureTime} <br>Arrival Time: ${trip.arrivalTime} <br>Please contact support if you have any questions.`;
+            await sendEmail(driver.email, "FastBuss", driver.name, message);
+
+            if (driver.one_signal_id) {
+                await sendPushNotification(driver.one_signal_id, "Trip Cancelled", message);
+            }
+
+            res.status(200).json({ message: "Trip cancelled successfully" });
+
+        } catch (error) {
+            console.error("Error canceling trip:", error);
+            res.status(500).json({ message: "Internal server error" });
+        }
+    },
+
+    getTripHistoryByBus: async (req: Request, res: Response) => {
+        try {
+            const { busId } = req.params;
+            if (!busId) {
+                res.status(400).json({ message: "Bus ID is required" });
+                return;
+            }
+            const subCompanyId = res.locals.user.subCompanyId;
+
+            const trips = await Trip.find({ busId, subCompanyId }).populate<{ routeId: IRoute }>("routeId");
+            const response = trips.map(trip => ({
+                _id: trip._id,
+                route: trip.routeId, 
+                busId: trip.busId,    
+                departureTime: trip.departureTime,
+                arrivalTime: trip.arrivalTime,
+                status: trip.status,
+                subCompanyId: trip.subCompanyId,
+                createdAt: trip.createdAt,
+                updatedAt: trip.updatedAt,
+                driverId: trip.driverId
+            }));
+            res.status(200).json({ message: "Trip history fetched successfully", data: response });
+        } catch (error) {
+            console.error("Error fetching trip history by bus:", error);
+            res.status(500).json({ message: "Internal server error" });
+        }
+    },
+
+    getTripHistoryBySubCompany: async (req: Request, res: Response) => {
+        try {
+            const subCompanyId = res.locals.user.subCompanyId;
+            const trips = await Trip.find({ subCompanyId }).populate<{ routeId: IRoute }>("routeId");
+            res.status(200).json({ message: "Trip history fetched successfully", data: trips });
+        } catch (error) {
+            console.error("Error fetching trip history by sub company:", error);
+            res.status(500).json({ message: "Internal server error" });
+        }
+    },
+
+    updateTrip: async (req: Request, res: Response) => {
+        try {
+            const { tripId } = req.params;
+            if (!tripId) {
+                res.status(400).json({ message: "Trip ID is required" });
+                return;
+            }
+            const subCompanyId = res.locals.user.subCompanyId;
+            const { departureTime, arrivalTime, status } = req.body;
+
+            if(!departureTime && !arrivalTime && !status) {
+                res.status(400).json({ message: "At least one field is required" });
+                return;
+            }
+            
+            const trip = await Trip.findOne({ _id: tripId, subCompanyId }).populate<{ routeId: IRoute }>("routeId");
+            if (!trip) return res.status(404).json({ message: "Trip not found" });
+
+            if (departureTime) trip.departureTime = departureTime;
+            if (arrivalTime) trip.arrivalTime = arrivalTime;
+            if (status && ["pending", "ongoing", "completed", "cancelled"].includes(status)) {
+                trip.status = status;
+            }
+
+            const driver = await User.findOne({ _id: trip.driverId, role: "driver", subCompanyId });
+            if (!driver) return res.status(404).json({ message: "Driver not found" });
+
+            const message = `Your trip has been updated:<br>Route: ${trip.routeId.routeName} <br>Origin: ${trip.routeId.origin} <br>Destination: ${trip.routeId.destination} <br>Departure Time: ${trip.departureTime} <br>Arrival Time: ${trip.arrivalTime} <br>Please contact support if you have any questions.`;
+            await sendEmail(driver.email, "FastBuss", driver.name, message);
+
+            if (driver.one_signal_id) {
+                await sendPushNotification(driver.one_signal_id, "Trip Updated", message);
+            }
+
+            await trip.save();
+
+            res.status(200).json({ message: "Trip updated successfully", data: trip });
+        } catch (error) {
+            console.error("Error updating trip:", error);
+            res.status(500).json({ message: "Internal server error" });
+        }
+    },
+
+    getAllSchedules: async (req: Request, res: Response) => {
+        try {
+            const subCompanyId = res.locals.user.subCompanyId;
+            const { status, startDate, endDate } = req.query;
+
+            const query: any = { subCompanyId };
+
+            if (status) {
+                query.status = status;
+            }
+
+            if (startDate && endDate) {
+                query.departureTime = {
+                    $gte: new Date(startDate as string),
+                    $lte: new Date(endDate as string)
+                };
+            }
+
+            const schedules = await Trip.find(query)
+                .populate('routeId')
+                .populate('busId')
+                .populate('driverId')
+                .sort({ departureTime: 1 });
+
+            const response = schedules.map(schedule => ({
+                _id: schedule._id,
+                route: schedule.routeId,
+                bus: schedule.busId,
+                driver: schedule.driverId,
+                departureTime: schedule.departureTime,
+                arrivalTime: schedule.arrivalTime,
+                status: schedule.status,
+                subCompanyId: schedule.subCompanyId,
+                createdAt: schedule.createdAt,
+                updatedAt: schedule.updatedAt
+            }));
+
+            res.status(200).json({
+                message: "Schedules fetched successfully",
+                data: response
+            });
+        } catch (error) {
+            console.error("Error fetching schedules:", error);
+            res.status(500).json({ message: "Internal server error" });
+        }
+    },
+
+    deleteSchedule: async (req: Request, res: Response) => {
+        try {
+            const { scheduleId } = req.params;
+            const subCompanyId = res.locals.user.subCompanyId;
+
+            if (!scheduleId) {
+                return res.status(400).json({ message: "Schedule ID is required" });
+            }
+
+            const schedule = await Trip.findOne({ _id: scheduleId, subCompanyId });
+            if (!schedule) {
+                return res.status(404).json({ message: "Schedule not found" });
+            }
+
+            // Notify driver about schedule deletion
+            const driver = await User.findOne({ _id: schedule.driverId });
+            if (driver) {
+                const message = `Your schedule has been cancelled:<br>Departure Time: ${schedule.departureTime}<br>Arrival Time: ${schedule.arrivalTime}`;
+                await sendEmail(driver.email, "Schedule Cancelled", driver.name, message);
+                
+                if (driver.one_signal_id) {
+                    await sendPushNotification(driver.one_signal_id, "Schedule Cancelled", message);
+                }
+            }
+
+            await Trip.deleteOne({ _id: scheduleId });
+
+            res.status(200).json({
+                message: "Schedule deleted successfully"
+            });
+        } catch (error) {
+            console.error("Error deleting schedule:", error);
+            res.status(500).json({ message: "Internal server error" });
+        }
+    },
+
+
+    // ==================== NOTIFICATION MANAGEMENT ====================
+    sendBulkNotification: async (req: Request, res: Response) => {
+        try {
+            const { title, message, recipients } = req.body;
+            const subCompanyId = res.locals.user.subCompanyId;
+
+            if (!title || !message || !recipients || !Array.isArray(recipients)) {
+                return res.status(400).json({ message: "Title, message, and recipients array are required" });
+            }
+
+            const users = await User.find({
+                _id: { $in: recipients },
+                subCompanyId
+            });
+
+            const emailPromises = users.map(user => 
+                sendEmail(user.email, title, user.name, message)
+            );
+
+            const pushNotificationPromises = users
+                .filter(user => user.one_signal_id)
+                .map(user => 
+                    sendPushNotification(user.one_signal_id!, title, message)
+                );
+
+            await Promise.all([...emailPromises, ...pushNotificationPromises]);
+
+            res.status(200).json({
+                message: "Bulk notification sent successfully",
+                data: {
+                    totalRecipients: users.length,
+                    emailsSent: emailPromises.length,
+                    pushNotificationsSent: pushNotificationPromises.length
+                }
+            });
+        } catch (error) {
+            console.error("Error sending bulk notification:", error);
+            res.status(500).json({ message: "Internal server error" });
+        }
+    },
 };
