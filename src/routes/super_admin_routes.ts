@@ -18,7 +18,7 @@ router.get("/list-sub-companies", superAdminController.list);
 router.delete("/delete-sub-company/:companyId", superAdminController.deleteCompany);
 router.put("/suspend-sub-company/:companyId", superAdminController.suspendCompany);
 router.put("/activate-sub-company/:companyId", superAdminController.activateCompany);
-router.put("/update-sub-company/:companyId", superAdminController.updateCompany);
+router.put("/update-sub-company", superAdminController.updateCompany);
 router.get("/view-sub-company-details/:companyId", superAdminController.viewCompanyDetails);
 
 

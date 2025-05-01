@@ -9,7 +9,7 @@ dotenv.config();
 const token_secret = process.env.JWT_SECRET;
 const isValidObjectId = mongoose.Types.ObjectId.isValid;
 
-interface DecodedToken extends JwtPayload {
+export interface DecodedToken extends JwtPayload {
     id: string;
     role: string;
 }
@@ -54,7 +54,7 @@ const tokenValidationMiddleware = async (req: Request, res: Response, next: Next
         next();
     } catch (error) {
         if (error instanceof TokenExpiredError) {
-            res.status(401).json({ message: "Token has expired." });
+            res.status(410).json({ message: "Token has expired." });
         } else if (error instanceof jwt.JsonWebTokenError) {
             res.status(403).json({ message: "Invalid token." });
         } else {

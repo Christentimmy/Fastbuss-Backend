@@ -8,7 +8,7 @@ export interface IBus extends Document {
     plateNumber: string;
     capacity: number;
     type: "standard" | "luxury" | "minibus";
-    status: "active" | "inactive" | "maintenance";
+    status: "active" | "inactive" | "maintenance" | "blocked";
     currentLocation: any;
 }
 

@@ -15,6 +15,8 @@ import driverRoutes from "./routes/driver_routes";
 import bookingRoutes from "./routes/booking_routes";
 import seatRoutes from "./routes/seat_routes";
 import paymentRoutes from "./routes/payment_routes";
+import dashboardRoutes from "./routes/dashboard_routes";
+
 
 dotenv.config();
 
@@ -37,6 +39,7 @@ app.use('/api/v1/driver', driverRoutes);
 app.use('/api/v1/booking', bookingRoutes);
 app.use('/api/v1/seat', seatRoutes);
 app.use('/api/v1/payment', paymentRoutes);
+app.use('/api/v1/dashboard', dashboardRoutes);
 
 const server = http.createServer(app);
 setupSocket(server);

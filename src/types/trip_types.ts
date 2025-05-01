@@ -12,4 +12,10 @@ export interface ITrip extends Document {
     createdAt: Date;
     updatedAt: Date;
     _id: Types.ObjectId;
+    seats: {
+        seatNumber: String, // like "1A", "2B", etc.
+        status: "available" | "booked",
+        userId: Types.ObjectId | null,
+        bookedAt: Date | null
+    }[];
 }

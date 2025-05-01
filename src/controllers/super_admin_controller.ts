@@ -9,9 +9,9 @@ export const superAdminController = {
 
     createCompany: async (req: Request, res: Response) => {
         try {
-            const { companyName, contactEmail, contactPhone, description, adminName, adminEmail, adminPassword } = req.body;
+            const { companyName, contactEmail, contactPhone, description, adminName, adminPassword } = req.body;
 
-            if (!companyName || !contactEmail || !contactPhone || !description || !adminName || !adminEmail || !adminPassword) {
+            if (!companyName || !contactEmail || !contactPhone || !description || !adminName || !adminPassword) {
                 res.status(400).json({ message: "All fields are required." });
                 return;
             }
@@ -27,7 +27,7 @@ export const superAdminController = {
                 return;
             }
 
-            const existingUser = await User.findOne({ email: adminEmail });
+            const existingUser = await User.findOne({ email: contactEmail });
             if (existingUser) {
                 res.status(409).json({ message: "Sub-admin email is already taken." });
                 return;
@@ -53,7 +53,7 @@ export const superAdminController = {
 
             await User.create({
                 name: adminName,
-                email: adminEmail,
+                email: contactEmail,
                 password: hashedPassword,
                 role: "sub_admin",
                 subCompanyId: newCompany._id,
@@ -172,8 +172,12 @@ export const superAdminController = {
 
     updateCompany: async (req: Request, res: Response) => {
         try {
-            const { companyId } = req.params;
-            const { companyName, contactEmail, contactPhone, description } = req.body;
+            const { companyId, companyName, contactEmail, contactPhone, description } = req.body;
+
+            if(!companyId) {
+                res.status(400).json({ message: "Company ID is required" });
+                return;
+            }
 
             if(!companyName && !contactEmail && !contactPhone && !description) {
                 res.status(400).json({ message: "No updates provided" });
@@ -201,7 +205,7 @@ export const superAdminController = {
 
             // Update logo if provided
             if (req.file) {
-                const result = await uploadToCloudinary(req.file, "sub_company_logos") as { secure_url?: string, url?: string };
+                const result = await uploadToCloudinary(req.file, "logo") as { secure_url?: string, url?: string };
                 if (result) {
                     company.logo = result.secure_url ?? result.url!;
                 }

@@ -10,4 +10,6 @@ export interface IRoute extends Document {
     status: "active" | "inactive";
     subCompanyId: Types.ObjectId;
     waypoints: { latitude: number; longitude: number }[];
+    createdAt: Date;
+    updatedAt: Date;
 }

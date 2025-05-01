@@ -9,18 +9,28 @@ import { sendEmail } from "../services/email_service";
 import sendPushNotification from "../config/onesignal";
 import Trip from "../models/trip_model";
 import { IRoute } from "../types/route_types";
+import { IBus } from "../types/bus_types";
+import { IUser } from "../types/user_types";
+import mongoose from "mongoose";
+import { StaffOperation } from "../models/staff_operation_model";
 
 
 
 export const subCompanyController = {
+
     // ==================== STAFF MANAGEMENT ====================
     createStaff: async (req: Request, res: Response) => {
         try {
-            const { name, email, password } = req.body;
+            const { name, email, password, role } = req.body;
             const subCompanyId = res.locals.user.subCompanyId;
 
-            if (!name || !email || !password) {
+            if (!name || !email || !password || !role) {
                 res.status(400).json({ message: "All fields are required" });
+                return;
+            }
+
+            if (role.toLowerCase() !== "staff" && role.toLowerCase() !== "sub_admin") {
+                res.status(400).json({ message: "Invalid role" });
                 return;
             }
 
@@ -30,13 +40,17 @@ export const subCompanyController = {
                 return;
             }
 
+            const salt = await bcrypt.genSalt(10);
+            const hashedPassword = await bcrypt.hash(password, salt);
+
             await User.create({
                 name,
                 email,
-                password,
-                role: "staff",
+                password: hashedPassword,
+                role: role,
                 subCompanyId,
                 status: "active",
+                is_email_verified: true,
             });
 
             res.status(201).json({ message: "Staff admin created successfully" });
@@ -49,7 +63,7 @@ export const subCompanyController = {
     listAllStaff: async (req: Request, res: Response) => {
         try {
             const subCompanyId = res.locals.user.subCompanyId;
-            const staff = await User.find({ role: "staff", subCompanyId });
+            const staff = await User.find({ role: "staff", subCompanyId }).select("name status role email");
             res.status(200).json({ message: "All staff fetched successfully", data: staff });
         } catch (error) {
             console.error("Error listing all staff:", error);
@@ -57,7 +71,7 @@ export const subCompanyController = {
         }
     },
 
-    updateStaff: async (req: Request, res: Response) => {
+    updateStaff: async (req: Request, res: Response) => {   
         try {
             const { staffId } = req.params;
             const { name, email, password } = req.body;
@@ -172,6 +186,88 @@ export const subCompanyController = {
         }
     },
 
+    staffDetails: async (req: Request, res: Response) => {
+        try {
+            const { staffId } = req.params;
+            const subCompanyId = res.locals.user.subCompanyId;
+
+            if (!staffId) {
+                res.status(400).json({ message: "Staff ID is required" });
+                return;
+            }
+
+            const staff = await User.findOne({ _id: staffId, subCompanyId }).select("-password");
+            if (!staff) {
+                res.status(404).json({ message: "Staff not found" });
+                return;
+            }
+
+            res.status(200).json({ message: "Staff details fetched successfully", staff });
+        } catch (error) {
+            console.error("❌ Error fetching staff details:", error);
+            res.status(500).json({ message: "Internal server error" });
+        }
+    },
+
+    staffAnalysis: async (req: Request, res: Response) => {
+        const { staffId } = req.params;
+        if (!staffId) {
+            res.status(400).json({ message: "Staff ID is required" });
+            return;
+        }
+        const subCompanyId = res.locals.user.subCompanyId;
+
+        if (!mongoose.Types.ObjectId.isValid(staffId)) {
+            return res.status(400).json({ message: 'Invalid staff ID' });
+        }
+
+        try {
+            const [staff ,operations] = await Promise.all([
+                User.findOne({ _id: staffId, subCompanyId }).select("-password"),
+                StaffOperation.find({ staffId: staffId, subCompanyId: subCompanyId })
+            ]);
+
+            if (!staff) {       
+                res.status(404).json({ message: "Staff not found" });
+                return;
+            }
+
+            if (!operations) {
+                res.status(404).json({ message: "No operations found" });
+                return;
+            }
+
+            const summary = {
+                totalOperations: operations.length,
+                operationsByType: {
+                    create: 0,
+                    update: 0,
+                    delete: 0,
+                    block: 0,
+                    unblock: 0
+                },
+                recentChanges: operations
+                    .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
+                    .slice(0, 10) // last 10 actions
+                    .map(op => ({
+                        date: op.timestamp,
+                        operationType: op.operationType,
+                        targetUserId: op.targetUserId,
+                        changes: op.changes
+                    }))
+            };
+
+            operations.forEach(op => {
+                summary.operationsByType[op.operationType]++;
+            });
+
+            res.status(200).json({ message: "Staff activity summary fetched successfully", data: {staff, summary} });
+        } catch (error) {
+            console.error('Error fetching staff activity summary:', error);
+            res.status(500).json({ message: 'Server error' });
+        }
+    },
+
 
     // ==================== COMPANY PROFILE MANAGEMENT ====================
     updateCompanyProfile: async (req: Request, res: Response) => {
@@ -191,7 +287,7 @@ export const subCompanyController = {
             }
 
             if (req.file) {
-                const result = await uploadToCloudinary(req.file, "sub_company_logos") as { secure_url?: string, url?: string };
+                const result = await uploadToCloudinary(req.file, "logo") as { secure_url?: string, url?: string };
                 if (!result) {
                     res.status(400).json({ message: "Failed to upload logo" });
                     return;
@@ -246,13 +342,18 @@ export const subCompanyController = {
                 return;
             }
 
-            const existingBus = await Bus.findOne({ plateNumber });
+            const existingBus = await Bus.findOne({ $or: [{ plateNumber }, { name }] });
             if (existingBus) {
-                res.status(409).json({ message: "Bus with this plate number already exists." });
-                return;
+                if (existingBus.plateNumber === plateNumber) {
+                    return res.status(409).json({ message: "Bus with this plate number already exists." });
+                }
+                if (existingBus.name === name) {
+                    return res.status(409).json({ message: "Bus with this name already exists." });
+                }
             }
 
-            const bus = await Bus.create({
+
+            await Bus.create({
                 name,
                 plateNumber,
                 capacity,
@@ -270,8 +371,11 @@ export const subCompanyController = {
     getMyBuses: async (_req: Request, res: Response) => {
         try {
             const subCompanyId = res.locals.user.subCompanyId;
+            console.log(subCompanyId);
 
-            const buses = await Bus.find({ subCompany: subCompanyId }).sort({ createdAt: -1 });
+            const buses = await Bus.find({ subCompany: subCompanyId })
+                .select("name status currentLocation createdAt updatedAt")
+                .sort({ createdAt: -1 });
             res.status(200).json({ data: buses });
         } catch (error) {
             console.error("Fetch buses error:", error);
@@ -290,9 +394,9 @@ export const subCompanyController = {
 
             const bus = await Bus.findOne({ _id: busId, subCompany: subCompanyId });
             if (!bus) return res.status(404).json({ message: "Bus not found" });
-            if (bus.status === "inactive") return res.status(400).json({ message: "Bus is already inactive" });
+            if (bus.status === "blocked") return res.status(200).json({ message: "Bus is already blocked" });
 
-            bus.status = "inactive";
+            bus.status = "blocked";
             await bus.save();
 
             res.status(200).json({ message: "Bus deactivated successfully" });
@@ -309,9 +413,9 @@ export const subCompanyController = {
 
             const bus = await Bus.findOne({ _id: busId, subCompany: subCompanyId });
             if (!bus) return res.status(404).json({ message: "Bus not found" });
-            if (bus.status === "active") return res.status(400).json({ message: "Bus is already active" });
+            if (bus.status === "inactive") return res.status(400).json({ message: "Bus is already inactive" });
 
-            bus.status = "active";
+            bus.status = "inactive";
             await bus.save();
 
             res.status(200).json({ message: "Bus activated successfully" });
@@ -355,9 +459,9 @@ export const subCompanyController = {
 
             const bus = await Bus.findOne({ _id: busId, subCompany: subCompanyId });
             if (!bus) return res.status(404).json({ message: "Bus not found" });
-            if (bus.status === "active") return res.status(400).json({ message: "Bus is already active" });
+            if (bus.status === "inactive") return res.status(400).json({ message: "Bus is already inactive" });
 
-            bus.status = "active";
+            bus.status = "inactive";
             await bus.save();
 
             res.status(200).json({ message: "Bus back from maintenance successfully" });
@@ -402,6 +506,80 @@ export const subCompanyController = {
         }
     },
 
+    deleteBus: async (req: Request, res: Response) => {
+        try {
+            const { busId } = req.params;
+            if (!busId) {
+                res.status(400).json({ message: "Bus ID is required" });
+                return;
+            }
+            const subCompanyId = res.locals.user.subCompanyId;
+
+            const bus = await Bus.findOneAndDelete({ _id: busId, subCompany: subCompanyId });
+            if (!bus) return res.status(404).json({ message: "Bus not found" });
+
+            res.status(200).json({ message: "Bus deleted successfully" });
+
+        } catch (error) {
+            console.error("Error deleting bus:", error);
+            res.status(500).json({ message: "Internal server error" });
+        }
+    },
+
+    noDriverBuses: async (req: Request, res: Response) => {
+        try {
+            const subCompanyId = res.locals.user.subCompanyId;
+            if (!subCompanyId) {
+                res.status(400).json({ message: "subcompanyId is required" });
+                return;
+            }
+
+            const buses = await Bus.find({ subCompany: subCompanyId, driver: { $eq: null } });
+            res.status(200).json({ message: "No driver buses fetched", data: buses });
+        } catch (error) {
+            console.error("Error fetching no driver buses:", error);
+            res.status(500).json({ message: "Internal server error" });
+        }
+    },
+
+    busDetails: async (req: Request, res: Response) => {
+        try {
+            const { busId } = req.params;
+            if (!busId) {
+                res.status(400).json({ message: "Bus ID is required" });
+                return;
+            }
+            const subCompanyId = res.locals.user.subCompanyId;
+
+            const bus = await Bus.findOne({ _id: busId, subCompany: subCompanyId });
+            if (!bus) return res.status(404).json({ message: "Bus not found" });
+
+            const driver = await User.findOne({ _id: bus.driver, subCompanyId });
+
+            const response = {
+                _id: bus._id,
+                name: bus.name,
+                plateNumber: bus.plateNumber,
+                capacity: bus.capacity,
+                type: bus.type,
+                status: bus.status,
+                location: bus.currentLocation,
+                driver: driver ? {
+                    _id: driver._id,
+                    name: driver.name,
+                    email: driver.email,
+                    phone: driver.phone,
+                    status: driver.status,
+                } : null
+            };
+
+            res.status(200).json({ message: "Bus details fetched successfully", data: response });
+        } catch (error) {
+            console.error("Error fetching bus details:", error);
+            res.status(500).json({ message: "Internal server error" });
+        }
+    },
+
 
     // ==================== DRIVER MANAGEMENT ====================
     createDriver: async (req: Request, res: Response) => {
@@ -414,20 +592,10 @@ export const subCompanyController = {
                 return;
             }
 
-            if (!req.file) {
-                res.status(400).json({ message: "Profile picture is required." });
-                return;
-            }
 
             const existingDriver = await User.findOne({ email });
             if (existingDriver) {
                 res.status(409).json({ message: "User with this email already exists." });
-                return;
-            }
-
-            const result = await uploadToCloudinary(req.file!, "profile_pictures") as { secure_url?: string, url?: string };
-            if (!result) {
-                res.status(400).json({ message: "Failed to upload profile picture" });
                 return;
             }
 
@@ -440,7 +608,6 @@ export const subCompanyController = {
                 phone,
                 password: hashedPassword,
                 role: "driver",
-                profilePicture: result.secure_url ?? result.url!,
                 subCompanyId,
                 is_email_verified: true,
             });
@@ -456,7 +623,12 @@ export const subCompanyController = {
         try {
             const subCompanyId = res.locals.user.subCompanyId;
 
-            const drivers = await User.find({ role: "driver", subCompanyId }).sort({ createdAt: -1 });
+            if (!subCompanyId) {
+                res.status(400).json({ message: "subcompanyId is required" });
+                return;
+            }
+
+            const drivers = await User.find({ role: "driver", subCompanyId }).select("-password").sort({ createdAt: -1 });
             res.status(200).json({ data: drivers });
         } catch (error) {
             console.error("getMyDrivers error:", error);
@@ -517,9 +689,8 @@ export const subCompanyController = {
             driver.status = "banned";
             await driver.save();
 
-            await sendEmail(driver.email, "FastBuss", driver.name, "You have been banned from using FastBuss. Please contact support for more information.");
-
             res.status(200).json({ message: "Driver banned successfully." });
+            sendEmail(driver.email, "FastBuss", driver.name, "You have been banned from using FastBuss. Please contact support for more information.");
         } catch (error) {
             console.error("banDriver error:", error);
             res.status(500).json({ message: "Internal server error" });
@@ -538,7 +709,7 @@ export const subCompanyController = {
                 return;
             }
 
-            driver.status = "active";
+            driver.status = "inactive";
             await driver.save();
 
             await sendEmail(driver.email, "FastBuss", driver.name, "You have been unbanned from using FastBuss. Please contact support for more information.");
@@ -562,6 +733,13 @@ export const subCompanyController = {
                 return;
             }
 
+            if (driver.assignedBus) {
+                const bus = await Bus.findOne({ _id: driver.assignedBus, subCompany: subCompanyId });
+                if (!bus) return res.status(404).json({ message: "Bus not found" });
+                bus.driver = null;
+                await bus!.save();
+            }
+
             res.status(200).json({ message: "Driver deleted successfully." });
         } catch (error) {
             console.error("deleteDriver error:", error);
@@ -573,32 +751,44 @@ export const subCompanyController = {
         try {
             const { busId, driverId } = req.body;
 
+            // Input validation
             if (!busId || !driverId) {
-                res.status(400).json({ message: "Bus ID and driver ID are required." });
-                return;
+                return res.status(400).json({ message: "Bus ID and driver ID are required." });
             }
 
             const subCompanyId = res.locals.user.subCompanyId.toString();
-            console.log(busId, driverId, subCompanyId);
 
-            const bus = await Bus.findOne({ _id: busId, subCompany: subCompanyId });
+            // Use Promise.all to run queries in parallel instead of sequentially
+            const [bus, driver, isAssigned] = await Promise.all([
+                Bus.findOne({ _id: busId, subCompany: subCompanyId }).lean(),
+                User.findOne({ _id: driverId, role: 'driver', subCompanyId }).lean(),
+                Bus.findOne({ driver: driverId }).lean()
+            ]);
+
+            // Validation checks
             if (!bus) return res.status(404).json({ message: "Bus not found." });
-
-            const driver = await User.findOne({ _id: driverId, role: 'driver', subCompanyId });
             if (!driver) return res.status(404).json({ message: "Driver not found." });
-
-            const isAssigned = await Bus.findOne({ driver: driverId });
             if (isAssigned) return res.status(400).json({ message: "Driver already assigned to a bus." });
 
-            bus.driver = driverId;
-            driver.assignedBus = busId;
-            await bus.save();
-            await driver.save();
+            // Perform updates in parallel
+            await Promise.all([
+                Bus.updateOne({ _id: busId }, { driver: driverId }),
+                User.updateOne({ _id: driverId }, { assignedBus: busId })
+            ]);
 
+            // Prepare email in the background - don't wait for it
             const message = `You have been assigned to a new bus:<br>Name: ${bus.name} <br>Plate Number: ${bus.plateNumber}<br>Please contact support if you have any questions.`;
-            await sendEmail(driver.email, "FastBuss", driver.name, message);
 
-            res.status(200).json({ message: "Driver assigned to bus successfully.", data: bus });
+            // Send the success response immediately
+            res.status(200).json({
+                message: "Driver assigned to bus successfully.",
+                data: { ...bus, driver: driverId }
+            });
+
+            // Send email without awaiting (non-blocking)
+            sendEmail(driver.email, "FastBuss", driver.name, message)
+                .catch(err => console.error("Failed to send assignment email:", err));
+
         } catch (error) {
             console.error("assignDriverToBus error:", error);
             res.status(500).json({ message: "Internal server error" });
@@ -607,15 +797,16 @@ export const subCompanyController = {
 
     unassignDriverFromBus: async (req: Request, res: Response) => {
         try {
-            const { busId } = req.params;
-            if (!busId) {
-                res.status(400).json({ message: "Bus ID is required." });
+            const { busId, driverId } = req.body;
+            if (!busId && !driverId) {
+                res.status(400).json({ message: "Bus ID or driver ID are required." });
                 return;
             }
 
             const subCompanyId = res.locals.user.subCompanyId.toString();
+            const query = driverId ? { driver: driverId, subCompany: subCompanyId } : { _id: busId, subCompany: subCompanyId };
 
-            const bus = await Bus.findOne({ _id: busId, subCompany: subCompanyId });
+            const bus = await Bus.findOne(query);
             if (!bus) return res.status(404).json({ message: "Bus not found." });
 
             const driver = await User.findOne({ _id: bus.driver, subCompanyId });
@@ -644,8 +835,9 @@ export const subCompanyController = {
             const drivers = await User.find({
                 role: "driver",
                 subCompanyId,
-                status: "inactive"
-            }).select("-password");
+                status: "inactive",
+                assignedBus: { $exists: true, $ne: null },
+            }).select("name email");
 
             res.status(200).json({ message: "Available drivers fetched", data: drivers });
         } catch (error) {
@@ -696,7 +888,7 @@ export const subCompanyController = {
             res.status(500).json({ message: "Internal server error" });
         }
     },
- 
+
     getTripHistoryByDriver: async (req: Request, res: Response) => {
         try {
             const { driverId } = req.params;
@@ -706,8 +898,27 @@ export const subCompanyController = {
             }
             const subCompanyId = res.locals.user.subCompanyId;
 
-            const trips = await Trip.find({ driverId, subCompanyId }).populate<{ routeId: IRoute }>("routeId");
-            res.status(200).json({ message: "Trip history fetched successfully", data: trips });
+            const trips = await Trip.find({ driverId, subCompanyId })
+                .select("routeId busId driverId")
+                .populate<{ routeId: IRoute }>("routeId")
+                .populate<{ busId: IBus }>("busId")
+                .populate<{ driverId: IUser }>("driverId");
+
+            const response = trips.map(trip => ({
+                _id: trip._id,
+                busName: trip.busId.name,
+                busPlateNumber: trip.busId.plateNumber,
+                departureTime: trip.departureTime,
+                arrivalTime: trip.arrivalTime,
+                distance: trip.routeId.distance,
+                price: trip.routeId.price,
+                status: trip.status,
+                routeName: trip.routeId.routeName,
+                origin: trip.routeId.origin,
+                destination: trip.routeId.destination
+            }));
+
+            res.status(200).json({ message: "Trip history fetched successfully", data: response });
         } catch (error) {
             console.error("Error fetching trip history by driver:", error);
             res.status(500).json({ message: "Internal server error" });
@@ -764,19 +975,29 @@ export const subCompanyController = {
 
     createRouteSchedule: async (req: Request, res: Response) => {
         try {
-            const { routeId, busId, departureTime, arrivalTime } = req.body;
+            const { routeId, driverId, departureTime, arrivalTime } = req.body;
             const subCompanyId = res.locals.user.subCompanyId;
 
-            if (!routeId || !busId || !departureTime || !arrivalTime) {
+            if (!routeId || !driverId || !departureTime || !arrivalTime) {
                 return res.status(400).json({ message: "All fields are required" });
             }
 
-            const route = await Route.findOne({ _id: routeId, subCompanyId });
+            const [route, driver] = await Promise.all([
+                Route.findOne({ _id: routeId, subCompanyId }),
+                User.findOne({ _id: driverId, role: 'driver', subCompanyId })
+            ]);
+
             if (!route) {
                 return res.status(404).json({ message: "Route not found" });
             }
+            if (!driver) {
+                return res.status(404).json({ message: "Driver not found" });
+            }
+            if (driver.status === "active") {
+                return res.status(400).json({ message: "Driver is already on a trip" });
+            }
 
-            const bus = await Bus.findOne({ _id: busId, subCompany: subCompanyId });
+            const bus = await Bus.findOne({ _id: driver.assignedBus, subCompany: subCompanyId });
             if (!bus) {
                 return res.status(404).json({ message: "Bus not found" });
             }
@@ -785,21 +1006,11 @@ export const subCompanyController = {
                 return res.status(400).json({ message: "Bus is already on a trip" });
             }
 
-            const driver = await User.findOne({
-                _id: bus.driver,
-                role: 'driver',
-                subCompanyId
-            });
-            if (!driver) {
-                return res.status(404).json({ message: "Driver not found" });
-            }
+            if (bus.status === "maintenance") return res.status(400).json({ message: "Bus Assigned To Driver Is Under Maintenance" });
 
-            if (driver.status === "active") {
-                return res.status(400).json({ message: "Driver is already on a trip" });
-            }
 
             const busConflict = await Trip.findOne({
-                busId,
+                busId: bus._id,
                 $or: [
                     { departureTime: { $lte: new Date(arrivalTime), $gte: new Date(departureTime) } },
                     { arrivalTime: { $lte: new Date(arrivalTime), $gte: new Date(departureTime) } }
@@ -809,24 +1020,23 @@ export const subCompanyController = {
                 return res.status(400).json({ message: "Bus is already assigned to another route during this time" });
             }
 
+            const seats = Array.from({ length: bus.capacity }, (_, i) => ({
+                seatNumber: (i + 1).toString(),
+                status: 'available'
+            }));
+
             const schedule = await Trip.create({
                 routeId: route._id,
-                busId,
-                driverId: bus.driver,
+                busId: bus._id,
+                driverId: driver._id,
                 departureTime: new Date(departureTime),
                 arrivalTime: new Date(arrivalTime),
                 distance: route.distance,
                 price: route.price,
                 subCompanyId,
-                status: "pending"
+                status: "pending",
+                seats
             });
-
-            const message = `You have been assigned to a new route:<br>Route Name: ${route.routeName} <br>Origin: ${route.origin} <br>Destination: ${route.destination} <br>Distance: ${route.distance}<br>Departure Time: ${departureTime} <br>Arrival Time: ${arrivalTime} <br>Please contact support if you have any questions.`;
-            await sendEmail(driver.email, "FastBuss", driver.name, message);
-
-            if (driver.one_signal_id) {
-                await sendPushNotification(driver.one_signal_id, "New Route", message);
-            }
 
             bus.status = "active";
             await bus.save();
@@ -838,6 +1048,15 @@ export const subCompanyController = {
                 message: "Route schedule created successfully",
                 schedule
             });
+
+
+            const message = `You have been assigned to a new route:<br>Route Name: ${route.routeName} <br>Origin: ${route.origin} <br>Destination: ${route.destination} <br>Distance: ${route.distance}<br>Departure Time: ${departureTime} <br>Arrival Time: ${arrivalTime} <br>Please contact support if you have any questions.`;
+            sendEmail(driver.email, "FastBuss", driver.name, message);
+
+            if (driver.one_signal_id) {
+                await sendPushNotification(driver.one_signal_id, "New Route", message);
+            }
+
         } catch (error) {
             console.error("Error creating route schedule:", error);
             res.status(500).json({ message: "Internal server error" });
@@ -1016,9 +1235,41 @@ export const subCompanyController = {
     // ==================== TRIP MANAGEMENT ====================
     getTripHistory: async (req: Request, res: Response) => {
         try {
+            const { status, startDate, endDate } = req.query;
             const subCompanyId = res.locals.user.subCompanyId;
-            const trips = await Trip.find({ subCompanyId });
-            res.status(200).json({ message: "Trip history fetched successfully", data: trips });
+
+            const query: any = { subCompanyId };
+            if (status) {
+                query.status = status;
+            }
+            if (startDate && endDate) {
+                const start = new Date(startDate as string);
+                const end = new Date(endDate as string);
+                end.setHours(23, 59, 59, 999);
+
+                query.departureTime = {
+                    $gte: start,
+                    $lte: end
+                };
+            }
+            const trips = await Trip.find(query)
+                .populate<{ routeId: IRoute, driverId: IUser, busId: IBus }>("routeId driverId busId");
+            const response = trips.map(trip => ({
+                _id: trip._id,
+                routeName: trip.routeId.routeName,
+                busName: trip.busId.name,
+                busId: trip.busId._id,
+                driverName: trip?.driverId?.name || null,
+                departureTime: trip.departureTime,
+                origin: trip.routeId.origin,
+                destination: trip.routeId.destination,
+                arrivalTime: trip.arrivalTime,
+                status: trip.status,
+                subCompanyId: trip.subCompanyId,
+                createdAt: trip.createdAt,
+                updatedAt: trip.updatedAt
+            }));
+            res.status(200).json({ message: "Trip history fetched successfully", data: response });
         } catch (error) {
             console.error("Error fetching trip history:", error);
             res.status(500).json({ message: "Internal server error" });
@@ -1034,19 +1285,30 @@ export const subCompanyController = {
             }
             const subCompanyId = res.locals.user.subCompanyId;
 
-            const trip = await Trip.findOne({ _id: tripId, subCompanyId }).populate("routeId driverId busId");
+            const trip = await Trip.findOne({ _id: tripId, subCompanyId }).populate<{ routeId: IRoute, driverId: IUser, busId: IBus }>("routeId driverId busId");
             if (!trip) return res.status(404).json({ message: "Trip not found" });
             const response = {
-                _id: trip._id,
-                route: trip.routeId, 
-                bus: trip.busId,     
-                driver: trip.driverId, 
+                tripId: trip._id,
+                status: trip.status,
                 departureTime: trip.departureTime,
                 arrivalTime: trip.arrivalTime,
-                status: trip.status,
-                subCompanyId: trip.subCompanyId,
-                createdAt: trip.createdAt,
-                updatedAt: trip.updatedAt
+                route: {
+                    name: trip.routeId.routeName,
+                    origin: trip.routeId.origin,
+                    destination: trip.routeId.destination,
+                    distance: trip.routeId.distance,
+                    price: trip.routeId.price
+                },
+                bus: {
+                    name: trip.busId.name,
+                    plateNumber: trip.busId.plateNumber,
+                    type: trip.busId.type,
+                    capacity: trip.busId.capacity
+                },
+                driver: {
+                    name: trip.driverId.name,
+                    phone: trip.driverId.phone
+                }
             };
 
             res.status(200).json({ message: "Trip details fetched successfully", data: response });
@@ -1068,7 +1330,7 @@ export const subCompanyController = {
             const trip = await Trip.findOne({ _id: tripId, subCompanyId }).populate<{ routeId: IRoute }>("routeId");
             if (!trip) return res.status(404).json({ message: "Trip not found" });
 
-            if (trip.status === "ongoing") {
+            if (trip.status === "pending") {
                 trip.status = "cancelled";
                 await trip.save();
             }
@@ -1085,14 +1347,14 @@ export const subCompanyController = {
             driver.status = "inactive";
             await driver.save();
 
+            res.status(200).json({ message: "Trip cancelled successfully" });
+
             const message = `Your trip has been cancelled:<br>Route: ${trip.routeId.routeName} <br>Origin: ${trip.routeId.origin} <br>Destination: ${trip.routeId.destination} <br>Departure Time: ${trip.departureTime} <br>Arrival Time: ${trip.arrivalTime} <br>Please contact support if you have any questions.`;
             await sendEmail(driver.email, "FastBuss", driver.name, message);
 
             if (driver.one_signal_id) {
                 await sendPushNotification(driver.one_signal_id, "Trip Cancelled", message);
             }
-
-            res.status(200).json({ message: "Trip cancelled successfully" });
 
         } catch (error) {
             console.error("Error canceling trip:", error);
@@ -1112,8 +1374,8 @@ export const subCompanyController = {
             const trips = await Trip.find({ busId, subCompanyId }).populate<{ routeId: IRoute }>("routeId");
             const response = trips.map(trip => ({
                 _id: trip._id,
-                route: trip.routeId, 
-                busId: trip.busId,    
+                route: trip.routeId,
+                busId: trip.busId,
                 departureTime: trip.departureTime,
                 arrivalTime: trip.arrivalTime,
                 status: trip.status,
@@ -1142,41 +1404,62 @@ export const subCompanyController = {
 
     updateTrip: async (req: Request, res: Response) => {
         try {
-            const { tripId } = req.params;
-            if (!tripId) {
-                res.status(400).json({ message: "Trip ID is required" });
-                return;
-            }
             const subCompanyId = res.locals.user.subCompanyId;
-            const { departureTime, arrivalTime, status } = req.body;
+            const { tripId, departureTime, arrivalTime, driverId } = req.body;
 
-            if(!departureTime && !arrivalTime && !status) {
-                res.status(400).json({ message: "At least one field is required" });
-                return;
+            if (!tripId) return res.status(400).json({ message: "Trip ID is required" });
+            if (!departureTime && !arrivalTime && !driverId) {
+                return res.status(400).json({ message: "At least one field is required" });
             }
-            
+
             const trip = await Trip.findOne({ _id: tripId, subCompanyId }).populate<{ routeId: IRoute }>("routeId");
             if (!trip) return res.status(404).json({ message: "Trip not found" });
 
+            const originalDriver = await User.findOne({ _id: trip.driverId, role: "driver", subCompanyId });
+            if (!originalDriver) return res.status(404).json({ message: "Original driver not found" });
+
+            // Update fields if provided
             if (departureTime) trip.departureTime = departureTime;
             if (arrivalTime) trip.arrivalTime = arrivalTime;
-            if (status && ["pending", "ongoing", "completed", "cancelled"].includes(status)) {
-                trip.status = status;
-            }
 
-            const driver = await User.findOne({ _id: trip.driverId, role: "driver", subCompanyId });
-            if (!driver) return res.status(404).json({ message: "Driver not found" });
+            let newDriver: IUser | null = null;
 
-            const message = `Your trip has been updated:<br>Route: ${trip.routeId.routeName} <br>Origin: ${trip.routeId.origin} <br>Destination: ${trip.routeId.destination} <br>Departure Time: ${trip.departureTime} <br>Arrival Time: ${trip.arrivalTime} <br>Please contact support if you have any questions.`;
-            await sendEmail(driver.email, "FastBuss", driver.name, message);
+            if (driverId && driverId !== trip.driverId.toString()) {
+                // Deactivate the original driver
+                originalDriver.status = "inactive";
+                await originalDriver.save();
 
-            if (driver.one_signal_id) {
-                await sendPushNotification(driver.one_signal_id, "Trip Updated", message);
+                // Activate and assign new driver
+                newDriver = await User.findOne({ _id: driverId, role: "driver", subCompanyId });
+                if (!newDriver) return res.status(404).json({ message: "New driver not found" });
+
+                newDriver.status = "active";
+                await newDriver.save();
+
+                trip.driverId = new mongoose.Types.ObjectId(driverId as string);
             }
 
             await trip.save();
 
+            // Notify the original driver
+            const originalMessage = `You have been removed from a trip:<br>Route: ${trip.routeId.routeName}<br>Origin: ${trip.routeId.origin}<br>Destination: ${trip.routeId.destination}<br>Please contact support for more information.`;
+
+            await sendEmail(originalDriver.email, "FastBuss", originalDriver.name, originalMessage);
+            if (originalDriver.one_signal_id) {
+                await sendPushNotification(originalDriver.one_signal_id, "Trip Unassigned", originalMessage);
+            }
+
+            // Notify the new driver, if reassigned
+            if (newDriver) {
+                const newMessage = `You have been assigned to a new trip:<br>Route: ${trip.routeId.routeName}<br>Origin: ${trip.routeId.origin}<br>Destination: ${trip.routeId.destination}<br>Departure Time: ${trip.departureTime}<br>Arrival Time: ${trip.arrivalTime}`;
+                await sendEmail(newDriver.email, "FastBuss", newDriver.name, newMessage);
+                if (newDriver.one_signal_id) {
+                    await sendPushNotification(newDriver.one_signal_id, "New Trip Assignment", newMessage);
+                }
+            }
+
             res.status(200).json({ message: "Trip updated successfully", data: trip });
+
         } catch (error) {
             console.error("Error updating trip:", error);
             res.status(500).json({ message: "Internal server error" });
@@ -1249,7 +1532,7 @@ export const subCompanyController = {
             if (driver) {
                 const message = `Your schedule has been cancelled:<br>Departure Time: ${schedule.departureTime}<br>Arrival Time: ${schedule.arrivalTime}`;
                 await sendEmail(driver.email, "Schedule Cancelled", driver.name, message);
-                
+
                 if (driver.one_signal_id) {
                     await sendPushNotification(driver.one_signal_id, "Schedule Cancelled", message);
                 }
@@ -1282,13 +1565,13 @@ export const subCompanyController = {
                 subCompanyId
             });
 
-            const emailPromises = users.map(user => 
+            const emailPromises = users.map(user =>
                 sendEmail(user.email, title, user.name, message)
             );
 
             const pushNotificationPromises = users
                 .filter(user => user.one_signal_id)
-                .map(user => 
+                .map(user =>
                     sendPushNotification(user.one_signal_id!, title, message)
                 );
 
