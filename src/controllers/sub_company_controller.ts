@@ -71,7 +71,7 @@ export const subCompanyController = {
         }
     },
 
-    updateStaff: async (req: Request, res: Response) => {   
+    updateStaff: async (req: Request, res: Response) => {
         try {
             const { staffId } = req.params;
             const { name, email, password } = req.body;
@@ -222,12 +222,12 @@ export const subCompanyController = {
         }
 
         try {
-            const [staff ,operations] = await Promise.all([
+            const [staff, operations] = await Promise.all([
                 User.findOne({ _id: staffId, subCompanyId }).select("-password"),
                 StaffOperation.find({ staffId: staffId, subCompanyId: subCompanyId })
             ]);
 
-            if (!staff) {       
+            if (!staff) {
                 res.status(404).json({ message: "Staff not found" });
                 return;
             }
@@ -261,7 +261,7 @@ export const subCompanyController = {
                 summary.operationsByType[op.operationType]++;
             });
 
-            res.status(200).json({ message: "Staff activity summary fetched successfully", data: {staff, summary} });
+            res.status(200).json({ message: "Staff activity summary fetched successfully", data: { staff, summary } });
         } catch (error) {
             console.error('Error fetching staff activity summary:', error);
             res.status(500).json({ message: 'Server error' });
@@ -1262,22 +1262,24 @@ export const subCompanyController = {
             }
             const trips = await Trip.find(query)
                 .populate<{ routeId: IRoute, driverId: IUser, busId: IBus }>("routeId driverId busId");
-            const response = trips.map(trip => ({
-                _id: trip._id,
-                routeName: trip.routeId.routeName,
-                busName: trip.busId.name,
-                busId: trip.busId._id,
-                stops: trip.stops?.length || 0,
-                driverName: trip?.driverId?.name || null,
-                departureTime: trip.departureTime,
-                origin: trip.routeId.origin,
-                destination: trip.routeId.destination,
-                arrivalTime: trip.arrivalTime,
-                status: trip.status,
-                subCompanyId: trip.subCompanyId,
-                createdAt: trip.createdAt,
-                updatedAt: trip.updatedAt
-            }));
+            const response = trips.map(trip => {                
+                return {
+                    _id: trip._id,
+                    routeName: trip.routeId.routeName,
+                    busName: trip?.busId?.name,
+                    busId: trip?.busId?._id,
+                    stops: trip.stops?.length || 0,
+                    driverName: trip?.driverId?.name || null,
+                    departureTime: trip.departureTime,
+                    origin: trip.routeId.origin,
+                    destination: trip.routeId.destination,
+                    arrivalTime: trip.arrivalTime,
+                    status: trip.status,
+                    subCompanyId: trip.subCompanyId,
+                    createdAt: trip.createdAt,
+                    updatedAt: trip.updatedAt
+                };
+            });
             res.status(200).json({ message: "Trip history fetched successfully", data: response });
         } catch (error) {
             console.error("Error fetching trip history:", error);
