@@ -975,11 +975,18 @@ export const subCompanyController = {
 
     createRouteSchedule: async (req: Request, res: Response) => {
         try {
-            const { routeId, driverId, departureTime, arrivalTime } = req.body;
+            const { routeId, driverId, departureTime, arrivalTime, stops } = req.body;
             const subCompanyId = res.locals.user.subCompanyId;
 
             if (!routeId || !driverId || !departureTime || !arrivalTime) {
                 return res.status(400).json({ message: "All fields are required" });
+            }
+
+            // Validate stops if provided
+            if (stops && (!Array.isArray(stops) || stops.some(stop =>
+                !stop.location || !stop.arrivalTime || !stop.departureTime
+            ))) {
+                return res.status(400).json({ message: "Each stop must have location, arrivalTime, and departureTime" });
             }
 
             const [route, driver] = await Promise.all([
@@ -1035,7 +1042,8 @@ export const subCompanyController = {
                 price: route.price,
                 subCompanyId,
                 status: "pending",
-                seats
+                seats,
+                stops,
             });
 
             bus.status = "active";
@@ -1259,6 +1267,7 @@ export const subCompanyController = {
                 routeName: trip.routeId.routeName,
                 busName: trip.busId.name,
                 busId: trip.busId._id,
+                stops: trip.stops?.length || 0,
                 driverName: trip?.driverId?.name || null,
                 departureTime: trip.departureTime,
                 origin: trip.routeId.origin,
@@ -1292,6 +1301,7 @@ export const subCompanyController = {
                 status: trip.status,
                 departureTime: trip.departureTime,
                 arrivalTime: trip.arrivalTime,
+                stops: trip.stops,
                 route: {
                     name: trip.routeId.routeName,
                     origin: trip.routeId.origin,

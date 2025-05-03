@@ -12,6 +12,11 @@ export interface ITrip extends Document {
     createdAt: Date;
     updatedAt: Date;
     _id: Types.ObjectId;
+    stops: {
+        location: string,
+        arrivalTime: Date,
+        departureTime: Date,
+    }[],
     seats: {
         seatNumber: String, // like "1A", "2B", etc.
         status: "available" | "booked",
