@@ -116,12 +116,12 @@ export const authController = {
             const token = generateToken(user);
 
             if (!user.is_email_verified) {
-                res.status(401).json({ message: 'Email not verified', token: token });
+                res.status(405).json({ message: 'Email not verified', token: token });
                 return;
             }
 
             if (user.status === "banned" || user.status === "blocked") {
-                res.status(401).json({ message: `User account is ${user.status}`, token: token });
+                res.status(407).json({ message: `User account is ${user.status}`, token: token });
                 return;
             }
 
