@@ -3,10 +3,42 @@ import { User } from "../models/user_model";
 import { uploadToCloudinary } from "../middlewares/upload_middleware";
 import bcrypt from "bcryptjs";
 import Trip from "../models/trip_model";
+import { escapeRegex } from "../utils/escape_regex";
+import { Route } from "../models/route_model";
+import { ITrip } from "../types/trip_types";
+import { IRoute } from "../types/route_types";
 import { IBus } from "../types/bus_types";
+import { IUser } from "../types/user_types";
+import { ISubCompany } from "../types/sub_company_types";
 
 export const userController = {
     // ==================== USER PROFILE ====================
+
+    getStatus: async (req: Request, res: Response) => {
+        try {
+            const userId = res.locals.userId;
+            const user = await User.findById(userId).select("status email is_email_verified");
+
+            if (!user) {
+                return res.status(404).json({ message: "User not found" });
+            }
+
+            const response = {
+                email: user.email,
+                status: user.status,
+                is_email_verified: user.is_email_verified,
+            }
+
+            res.status(200).json({
+                message: "User status fetched successfully",
+                data: response,
+            });
+        } catch (error) {
+            console.error("getStatus error:", error);
+            res.status(500).json({ message: "Internal server error" });
+        }
+    },
+
     getProfile: async (req: Request, res: Response) => {
         try {
             const userId = res.locals.userId;
@@ -147,26 +179,26 @@ export const userController = {
         try {
             const userId = res.locals.userId;
             const { tripId } = req.body;
-    
+
             if (!tripId) {
                 return res.status(400).json({ message: "Trip ID is required" });
             }
-    
+
             const user = await User.findById(userId);
             if (!user) {
                 return res.status(404).json({ message: "User not found" });
             }
-    
+
             const trip = await Trip.findById(tripId);
             if (!trip || trip.status !== "pending") {
                 return res.status(400).json({ message: "Trip is not available" });
             }
-    
+
             const alreadyBooked = trip.seats.find(seat => seat.userId?.toString() === userId);
             if (alreadyBooked) {
                 return res.status(400).json({ message: "You have already booked a seat on this trip" });
             }
-    
+
             const updatedTrip = await Trip.findOneAndUpdate(
                 {
                     _id: tripId,
@@ -182,11 +214,11 @@ export const userController = {
                 },
                 { new: true }
             );
-    
+
             if (!updatedTrip) {
                 return res.status(400).json({ message: "No available seats. Please try another trip." });
             }
-    
+
             res.status(200).json({ message: "Trip booked successfully" });
         } catch (error) {
             console.error("bookTrip error:", error);
@@ -213,24 +245,65 @@ export const userController = {
 
     getAvailableTrips: async (req: Request, res: Response) => {
         try {
-            const userId = res.locals.userId;
-            const user = await User.findById(userId);
+            const user = res.locals.user;
             if (!user) {
                 return res.status(404).json({ message: "User not found" });
             }
 
-            const allTrips = await Trip.find({ status: "pending", departureDate: { $gte: new Date() } });
-
-            // Filter trips that still have at least one seat available
-            const availableTrips = allTrips.filter(trip =>
-                trip.seats.some(seat => seat.status === "available")
-            );
-
-            if (availableTrips.length === 0) {
-                return res.status(400).json({ message: "No available trips with free seats" });
+            let { departureDate, destination, origin } = req.query;
+            if (!departureDate || !destination || !origin) {
+                return res.status(400).json({ message: "All fields are required" });
             }
 
-            res.status(200).json({ message: "Available trips fetched successfully", data: availableTrips });
+            const parsedDepartureDate = new Date(departureDate as string);
+            if (isNaN(parsedDepartureDate.getTime())) {
+                return res.status(400).json({ message: "Invalid departure date" });
+            }
+
+            const sanitizedDestination = escapeRegex(destination as string);
+            const sanitizedOrigin = escapeRegex(origin as string);
+
+            const matchedRoutes = await Route.find({
+                origin: { $regex: sanitizedOrigin, $options: "i" },
+                destination: { $regex: sanitizedDestination, $options: "i" },
+            }).distinct("_id");
+
+            if (!matchedRoutes) {
+                return res.status(404).json({ message: "No matching route found" });
+            }
+
+            const startDate = new Date(parsedDepartureDate);
+            startDate.setHours(0, 0, 0, 0);
+            const endDate = new Date(parsedDepartureDate);
+            endDate.setHours(23, 59, 59, 999);
+
+            const alltrips = await Trip.find({
+                departureTime: { $gte: startDate, $lte: endDate },
+                routeId: { $in: matchedRoutes },
+                status: "pending",
+                seats: { $elemMatch: { status: "available" } }
+            }).populate<{ routeId: IRoute, subCompanyId: ISubCompany }>("routeId subCompanyId");
+
+            const response = alltrips.map(trip => ({
+                id: trip._id,
+                route: {
+                    origin: trip.routeId.origin,
+                    destination: trip.routeId.destination,
+                    distance: trip.routeId.distance,
+                    price: trip.routeId.price,
+                },
+                departureTime: trip.departureTime,
+                arrivalTime: trip.arrivalTime,
+                status: trip.status,
+                subCompany: {
+                    name: trip.subCompanyId.companyName,
+                    logo: trip.subCompanyId.logo,
+                },
+                stops: trip.stops.length,
+                seats: trip.seats.filter(seat => seat.status === "available").length,
+            }));
+
+            res.status(200).json({ message: "Available trips fetched successfully", data: response });
         } catch (error) {
             console.error("getAvailableTrips error:", error);
             res.status(500).json({ message: "Internal server error" });
@@ -241,7 +314,7 @@ export const userController = {
         try {
             const userId = res.locals.userId;
             const user = await User.findById(userId);
-            if(!user){
+            if (!user) {
                 return res.status(404).json({ message: "User not found" });
             }
 
@@ -252,7 +325,7 @@ export const userController = {
             res.status(500).json({ message: "Internal server error" });
         }
     },
-    
+
 };
 
 

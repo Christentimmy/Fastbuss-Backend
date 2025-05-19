@@ -8,16 +8,17 @@ import { roleMiddleware } from "../middlewares/role_middleware";
 const router = express.Router();
 router.use(tokenValidationMiddleware);
 router.use(statusChecker);
-router.use(roleMiddleware(["user"]));
+router.use(roleMiddleware(["user", "super_admin"]));
 
 
 // ==================== USER PROFILE ROUTES ====================
-router.get("/profile", userController.getProfile);
+router.get("/get-user-details", userController.getProfile);
 router.put("/profile", uploadImage.single("profilePicture"), userController.updateProfile);
 router.get("/booked-trips", userController.getBookedTrips);
 router.get("/available-trips", userController.getAvailableTrips);
 router.get("/trip-history", userController.getAllTripHistory);
 router.post("/book-trip", userController.bookTrip);
+router.get("/get-status", userController.getStatus);
 
 // ==================== USER NOTIFICATION ROUTES ====================
 router.put("/notification-token", userController.updateNotificationToken);

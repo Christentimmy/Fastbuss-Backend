@@ -95,6 +95,7 @@ export const authController = {
     login: async (req: Request, res: Response) => {
         try {
             const { email, password } = req.body;
+            console.log(req.body);
 
             if (!email || !password) {
                 res.status(400).json({ message: "Email and Password are required" });
@@ -103,7 +104,7 @@ export const authController = {
 
             const user = await User.findOne({ email }) as IUser;
             if (!user) {
-                res.status(404).json({ message: 'User not found' });
+                res.status(404).json({ message: 'Invalid Credentials' });
                 return;
             }
 
@@ -246,7 +247,7 @@ export const authController = {
             user.password = hashedPassword;
             await user.save();
 
-            res.status(200).json({ message: "Password changed successfully" });                     
+            res.status(200).json({ message: "Password changed successfully" });
         } catch (error) {
             console.error("❌ Error changing password:", error);
             res.status(500).json({ message: "Internal server error" });
@@ -255,7 +256,7 @@ export const authController = {
 
     forgotPassword: async (req: Request, res: Response) => {
         try {
-            const { email } = req.body; 
+            const { email } = req.body;
             if (!email) {
                 res.status(400).json({ message: "Email is required" });
                 return;
@@ -271,7 +272,7 @@ export const authController = {
             await redisController.saveOtpToStore(email, otp);
             await sendOTP(email, otp);
 
-            res.status(200).json({ message: "OTP sent to email" }); 
+            res.status(200).json({ message: "OTP sent to email" });
 
         } catch (error) {
             console.error("❌ Error sending forgot password OTP:", error);
@@ -305,7 +306,7 @@ export const authController = {
             user.password = hashedPassword;
             await user.save();
 
-            await redisController.removeOtp(email); 
+            await redisController.removeOtp(email);
 
             res.status(200).json({ message: "Password reset successfully" });
         } catch (error) {
