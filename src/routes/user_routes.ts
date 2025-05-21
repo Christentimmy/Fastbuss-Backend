@@ -8,7 +8,7 @@ import { roleMiddleware } from "../middlewares/role_middleware";
 const router = express.Router();
 router.use(tokenValidationMiddleware);
 router.use(statusChecker);
-router.use(roleMiddleware(["user", "super_admin"]));
+router.use(roleMiddleware(["user", "super_admin", "sub_admin"]));
 
 
 // ==================== USER PROFILE ROUTES ====================
@@ -17,7 +17,7 @@ router.put("/profile", uploadImage.single("profilePicture"), userController.upda
 router.get("/booked-trips", userController.getBookedTrips);
 router.get("/available-trips", userController.getAvailableTrips);
 router.get("/trip-history", userController.getAllTripHistory);
-router.post("/book-trip", userController.bookTrip);
+router.post("/book-trip", userController.altbookTrip);
 router.get("/get-status", userController.getStatus);
 
 // ==================== USER NOTIFICATION ROUTES ====================

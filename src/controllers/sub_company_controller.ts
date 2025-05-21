@@ -1027,10 +1027,30 @@ export const subCompanyController = {
                 return res.status(400).json({ message: "Bus is already assigned to another route during this time" });
             }
 
-            const seats = Array.from({ length: bus.capacity }, (_, i) => ({
-                seatNumber: (i + 1).toString(),
-                status: 'available'
-            }));
+            // const seats = Array.from({ length: bus.capacity }, (_, i) => ({
+            //     seatNumber: (i + 1).toString(),
+            //     status: 'available'
+            // }));
+
+            const seatLetters = ['A', 'B', 'C', 'D'];
+            const totalSeats = bus.capacity;
+            const seatsPerRow = seatLetters.length;
+            const totalRows = Math.ceil(totalSeats / seatsPerRow);
+
+            const seats = [];
+
+            for (let row = 1; row <= totalRows; row++) {
+                for (let col = 0; col < seatsPerRow; col++) {
+                    const seatNumber = `${row}${seatLetters[col]}`;
+                    seats.push({
+                        seatNumber,
+                        status: 'available'
+                    });
+
+                    if (seats.length === totalSeats) break;
+                }
+                if (seats.length === totalSeats) break;
+            }
 
             const schedule = await Trip.create({
                 routeId: route._id,
@@ -1262,7 +1282,7 @@ export const subCompanyController = {
             }
             const trips = await Trip.find(query)
                 .populate<{ routeId: IRoute, driverId: IUser, busId: IBus }>("routeId driverId busId");
-            const response = trips.map(trip => {                
+            const response = trips.map(trip => {
                 return {
                     _id: trip._id,
                     routeName: trip.routeId.routeName,

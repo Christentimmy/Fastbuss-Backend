@@ -14,11 +14,19 @@ const tripSchema = new mongoose.Schema<ITrip>({
         arrivalTime: { type: Date, default: null },
         departureTime: { type: Date, default: null },
     }],
+    // seats: [{
+    //     seatNumber: String, // like "1A", "2B", etc.
+    //     status: { type: String, enum: ["available", "booked"], default: "available" },
+    //     userId: { type: mongoose.Schema.Types.ObjectId, ref: "Users", default: null },
+    //     bookedAt: { type: Date }
+    // }]
     seats: [{
-        seatNumber: String, // like "1A", "2B", etc.
+        seatNumber: String,
         status: { type: String, enum: ["available", "booked"], default: "available" },
         userId: { type: mongoose.Schema.Types.ObjectId, ref: "Users", default: null },
-        bookedAt: { type: Date }
+        bookedAt: { type: Date },
+        passengerName: { type: String },
+        passengerType: { type: String, enum: ["main", "guest"], default: "main" }
     }]
 }, { timestamps: true });
 

@@ -1,4 +1,3 @@
-
 import { ITrip } from "@/types/trip_types";
 import { IRoute } from "@/types/route_types";
 import { IBus } from "@/types/bus_types";
@@ -484,3 +483,250 @@ export function generateAlertEmailTemplate(companyName: string, trip: ITrip, rou
 
   `
 }
+
+interface Passenger {
+    name: string;
+    seat: string;
+    price: number;
+}
+
+export function generateBookingEmailTemplate(
+    companyName: string,
+    trip: ITrip,
+    route: IRoute,
+    bus: IBus,
+    driverName: string,
+    passengers: Passenger[]
+) {
+    // Format dates
+    const departureDate = new Date(trip.departureTime).toLocaleDateString('en-US', { 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+    });
+    const departureTime = new Date(trip.departureTime).toLocaleTimeString('en-US', { 
+        hour: '2-digit', 
+        minute: '2-digit' 
+    });
+    const arrivalTime = new Date(trip.arrivalTime).toLocaleTimeString('en-US', { 
+        hour: '2-digit', 
+        minute: '2-digit' 
+    });
+
+    // Calculate duration
+    const duration = Math.round((new Date(trip.arrivalTime).getTime() - new Date(trip.departureTime).getTime()) / (1000 * 60));
+    const hours = Math.floor(duration / 60);
+    const minutes = duration % 60;
+    const durationText = `${hours}h ${minutes}m`;
+
+    // Calculate total price
+    const totalPrice = passengers.reduce((sum, passenger) => sum + passenger.price, 0);
+
+    // Generate passenger HTML
+    const passengerHTML = passengers.map(passenger => `
+        <div class="bg-blue-50 rounded-lg p-3 mb-3">
+            <div class="flex justify-between items-center">
+                <div>
+                    <p class="text-blue-900 font-medium">${passenger.name}</p>
+                    <div class="flex flex-wrap mt-1">
+                        <span class="seat-badge">${passenger.seat}</span>
+                    </div>
+                </div>
+                <div class="text-right">
+                    <p class="text-blue-400 text-xs">Ticket Price</p>
+                    <p class="text-blue-900 font-medium">$${passenger.price.toFixed(2)}</p>
+                </div>
+            </div>
+        </div>
+    `).join('');
+
+  return `
+ <!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Bus Ticket Receipt</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Libre+Barcode+128&display=swap');
+
+    body {
+      font-family: 'Poppins', sans-serif;
+      background: white;
+      padding: 0;
+      margin: 0;
+      max-width: 100%;
+    }
+
+    .barcode {
+      font-family: 'Libre Barcode 128', cursive;
+      font-size: 32px;
+      letter-spacing: 7px;
+      color: #000;
+    }
+
+    .route-dots {
+      position: relative;
+      height: 60px;
+    }
+
+    .route-dots::before, .route-dots::after {
+      content: "";
+      position: absolute;
+      width: 12px;
+      height: 12px;
+      background-color: #3b82f6;
+      border-radius: 50%;
+      left: 50%;
+      transform: translateX(-50%);
+    }
+
+    .route-dots::before { top: 0; }
+    .route-dots::after { bottom: 0; }
+
+    .route-line {
+      position: absolute;
+      left: 50%;
+      top: 6px;
+      bottom: 6px;
+      width: 2px;
+      background-color: #3b82f6;
+      transform: translateX(-50%);
+    }
+
+    .seat-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+      background-color: #3b82f6;
+      color: white;
+      font-weight: 600;
+      margin-right: 6px;
+      margin-bottom: 6px;
+    }
+
+    .ticket-divider {
+      border-top: 1px dashed #e5e7eb;
+      margin: 12px 0;
+    }
+  </style>
+</head>
+<body>
+  <!-- Full-width container without fixed width -->
+  <div class="w-full max-w-full">
+  
+  <!-- Ticket Header -->
+  <div class="bg-gradient-to-r from-blue-600 to-blue-500 p-4 text-white">
+      <div class="flex justify-between items-center">
+          <div>
+                  <h1 class="text-xl font-bold">${companyName}</h1>
+              <p class="text-blue-100 text-xs">Your journey, our priority</p>
+          </div>
+          <div class="bg-white/20 p-1 rounded">
+              <i class="fas fa-bus text-lg"></i>
+          </div>
+      </div>
+  </div>
+  
+  <!-- Success Message - Made more compact -->
+  <div class="bg-blue-50 p-3 border-b border-blue-100 flex items-center">
+      <div class="bg-green-500 rounded-full p-1 mr-2">
+          <i class="fas fa-check text-white text-sm"></i>
+      </div>
+      <div>
+          <h3 class="font-semibold text-green-800 text-sm">Booking Confirmed!</h3>
+              <p class="text-xs text-blue-800">${passengers.length} tickets booked successfully</p>
+      </div>
+  </div>
+  
+  <!-- Ticket Body - Reduced padding -->
+  <div class="p-3">
+      <div class="flex justify-between items-start mb-4">
+          <div>
+              <p class="text-blue-400 text-xs uppercase font-medium">From</p>
+                  <h3 class="text-lg font-bold text-blue-900">${route.origin}</h3>
+          </div>
+          
+          <div class="text-center">
+              <div class="route-dots">
+                  <div class="route-line"></div>
+              </div>
+                  <p class="text-blue-400 text-xs mt-1">${durationText}</p>
+          </div>
+          
+          <div class="text-right">
+              <p class="text-blue-400 text-xs uppercase font-medium">To</p>
+                  <h3 class="text-lg font-bold text-blue-900">${route.destination}</h3>
+          </div>
+      </div>
+      
+      <!-- More compact grid -->
+      <div class="grid grid-cols-2 gap-2 mb-4">
+          <div>
+              <p class="text-blue-400 text-xs uppercase font-medium">Date</p>
+                  <p class="text-blue-900 font-medium text-sm">${departureDate}</p>
+          </div>
+          <div>
+              <p class="text-blue-400 text-xs uppercase font-medium">Departure</p>
+                  <p class="text-blue-900 font-medium text-sm">${departureTime}</p>
+          </div>
+          <div>
+                  <p class="text-blue-400 text-xs uppercase font-medium">Bus</p>
+                  <p class="text-blue-900 font-medium text-sm">${bus.name}</p>
+          </div>
+          <div>
+                  <p class="text-blue-400 text-xs uppercase font-medium">Driver</p>
+                  <p class="text-blue-900 font-medium text-sm">${driverName}</p>
+              </div>
+          </div>
+          
+          <!-- Passenger Details Section - More compact -->
+          <div class="mb-4">
+              <h4 class="text-blue-400 text-xs uppercase font-medium mb-2">Passenger Details</h4>
+              ${passengerHTML}
+      </div>
+      
+      <div class="ticket-divider"></div>
+      
+          <!-- Total Price - More compact -->
+          <div class="flex justify-between items-center mb-4">
+              <div>
+                      <p class="text-blue-600 font-medium text-sm">Total Amount Paid</p>
+              </div>
+              <div class="text-right">
+                      <p class="text-blue-900 font-bold text-lg">$${totalPrice.toFixed(2)}</p>
+              </div>
+          </div>
+      
+      <div class="flex justify-between items-center">
+          <div>
+              <p class="text-blue-400 text-xs uppercase font-medium mb-1">Boarding Pass</p>
+              <div class="barcode">||| | ||| || ||| | || |||</div>
+          </div>
+          <div class="text-right">
+              <div class="bg-blue-600 text-white p-1 rounded">
+                  <i class="fas fa-qrcode text-lg"></i>
+              </div>
+          </div>
+      </div>
+  </div>
+  
+  <!-- Ticket Footer - More compact -->
+  <div class="bg-blue-50 p-2 border-t border-blue-100 text-center">
+      <p class="text-blue-600 text-xs">
+          <i class="fas fa-info-circle mr-1"></i>
+          Present this ticket to the driver. Boarding begins 15 minutes before departure.
+      </p>
+  </div>
+</div>
+</body>
+</html>
+    `;
+}
+
