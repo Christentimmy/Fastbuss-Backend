@@ -16,6 +16,7 @@ import bookingRoutes from "./routes/booking_routes";
 import seatRoutes from "./routes/seat_routes";
 import paymentRoutes from "./routes/payment_routes";
 import dashboardRoutes from "./routes/dashboard_routes";
+import paypalRoutes from "./routes/paypal_routes";
 
 
 dotenv.config();
@@ -30,11 +31,12 @@ app.use(helmet());
 //   credentials: true,
 // }));
 
-const origin = process.env.ORIGIN;
+// const origin = process.env.ORIGIN;/
 app.use(cors({
   origin: (origin, callback) => {
     const allowedOrigins = [
-      "http://localhost:5173",
+      "http://localhost:5000",
+      process.env.FRONTEND_URL,
       origin?.toString(),
     ];
     if (!origin || allowedOrigins.includes(origin)) {
@@ -62,6 +64,7 @@ app.use('/api/v1/booking', bookingRoutes);
 app.use('/api/v1/seat', seatRoutes);
 app.use('/api/v1/payment', paymentRoutes);
 app.use('/api/v1/dashboard', dashboardRoutes);
+app.use('/api/v1/paypal', paypalRoutes);
 
 const server = http.createServer(app);
 setupSocket(server);

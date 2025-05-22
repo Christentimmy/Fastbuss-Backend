@@ -4,7 +4,8 @@ import { Resend } from "resend";
 import { ITrip } from "@/types/trip_types";
 import { IRoute } from "@/types/route_types";
 import { IBus } from "@/types/bus_types";
-import { convertHtmlToImage } from "../utils/convert_html_to_image";
+import { generatePDF } from "../utils/convert_html_to_image";
+import { Types } from "mongoose";
 
 dotenv.config();
 
@@ -55,10 +56,12 @@ export async function sendAlertEmail(companyName: string, companyEmail: string, 
     }
 }
 
-interface Passenger {
+export interface Passenger {
     name: string;
     seat: string;
     price: number;
+    type?: "main" | "guest",
+    seatId? : Types.ObjectId | null,
 }
 
 export async function sendTicketEmail(
@@ -71,7 +74,8 @@ export async function sendTicketEmail(
     passengers: Passenger[]
 ) {
     const html = generateBookingEmailTemplate(companyName, trip, route, bus, driverName, passengers);
-    const imageBuffer = await convertHtmlToImage(html);
+    // const imageBuffer = await convertHtmlToImage(html);
+    const imageBuffer = await generatePDF(html);
 
     // Create a simple email message
     const emailHtml = `
@@ -92,9 +96,9 @@ export async function sendTicketEmail(
             to: userEmail,
             subject: "Your FastBuss Ticket Confirmation",
             attachments: [{
-                filename: 'ticket.png',
-                content: Buffer.from(imageBuffer).toString('base64'),
-                contentType: 'image/png'
+                filename: 'ticket.pdf',
+                content: imageBuffer.toString('base64'),
+                contentType: 'application/pdf'
             }],
             html: emailHtml,
         });

@@ -17,22 +17,19 @@ export interface ITrip extends Document {
     arrivalTime: Date,
     departureTime: Date,
   }[],
-  // seats: {
-  //     seatNumber: String, // like "1A", "2B", etc.
-  //     status: "available" | "booked",
-  //     userId: Types.ObjectId | null,
-  //     bookedAt: Date | null
-  // }[];
   seats: ISeat[];
 }
 
 export interface ISeat {
   _id: Types.ObjectId;
+  status: "available" | "booked" | "reserved";
+  userId: Types.ObjectId | null;
   seatNumber: string;
-  status: "available" | "booked";
-  userId?: Types.ObjectId | null;
-  bookedAt?: Date;
-  passengerName?: string;
-  passengerType?: "main" | "guest";
+  bookedAt: Date | null;
+  updatedAt: Date | null;
+  passengerName?: string | null; 
+  reservedAt: Date | null,
+  passengerType: "main" | "guest" | null,
 }
+
 

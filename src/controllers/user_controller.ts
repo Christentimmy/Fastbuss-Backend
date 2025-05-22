@@ -13,8 +13,12 @@ import { generateTicketNumber } from "../utils/generate_booking_number";
 import { sendTicketEmail } from "../services/email_service";
 import { IUser } from "../types/user_types";
 import { ITrip } from "@/types/trip_types";
-import fs from 'fs';
-import path from 'path';
+import { PayPalService } from '../services/paypal_service';
+import { seatController } from "./seat_controller";
+import mongoose from "mongoose";
+
+const paypalService = new PayPalService();
+
 
 
 export const userController = {
@@ -181,118 +185,122 @@ export const userController = {
         }
     },
 
-    altbookTrip: async (req: Request, res: Response) => {
+    bookTrip: async (req: Request, res: Response) => {
         try {
-            // 1. Get user ID and validate input
-            const userId = res.locals.userId;
-            const { tripId, passengers } = req.body;
+            const session = await mongoose.startSession();
 
-            if (!tripId || !passengers) {
-                return res.status(400).json({ message: "Trip ID and passenger count are required" });
-            }
+            await session.withTransaction(async () => {
+                // 1. Get user ID and validate input
+                const userId = res.locals.userId;
+                const { tripId, passengers } = req.body;
 
-            // 2. Check if user exists
-            const user = await User.findById(userId);
-            if (!user) return res.status(404).json({ message: "User not found" });
-
-            // 3. Find and validate the trip
-            const trip = await Trip.findById(tripId).populate<{ routeId: IRoute, subCompanyId: ISubCompany, busId: IBus, driverId: IUser }>("routeId subCompanyId busId driverId");
-            if (!trip || trip.status !== "pending") {
-                return res.status(400).json({ message: "Trip is not available for booking" });
-            }
-
-            // 4. Validate passenger count
-            const passengerCount = parseInt(passengers.toString());
-            if (isNaN(passengerCount) || passengerCount <= 0) {
-                return res.status(400).json({ message: "Invalid passenger count" });
-            }
-
-            // 5. Check seat availability
-            const availableSeats = trip.seats.filter(seat => seat.status === "available");
-            if (availableSeats.length < passengerCount) {
-                return res.status(400).json({ message: `Only ${availableSeats.length} seat(s) left.` });
-            }
-
-            // 6. Prepare passenger list
-            const passengersList = [];
-            for (let i = 0; i < passengerCount; i++) {
-                passengersList.push({
-                    name: i === 0 ? user.name : `Guest ${i} ${user.name}`,
-                    type: i === 0 ? "main" : "guest"
-                });
-            }
-
-            // 7. Book the seats
-            const bookedSeatNumbers = [];
-            const emailPassengers = [];
-
-            for (let i = 0; i < passengerCount; i++) {
-                const seat = availableSeats[i];
-                const passenger = passengersList[i];
-
-                seat.status = "booked";
-                seat.userId = userId;
-                seat.bookedAt = new Date();
-                seat.passengerName = passenger.name;
-                seat.passengerType = passenger.type as "main" | "guest";
-                bookedSeatNumbers.push(seat.seatNumber);
-
-                // Create passenger object for email using route price
-                emailPassengers.push({
-                    name: passenger.name,
-                    seat: seat.seatNumber,
-                    price: trip.routeId.price // Use the route's price
-                });
-            }
-
-            // 8. Save the updated trip
-            await trip.save();
-
-            // 9. Calculate total price
-            const pricePerSeat = trip.routeId.price;
-            const totalPrice = passengerCount * pricePerSeat;
-
-
-            const booking = new Booking({
-                user: userId,
-                trip: tripId,
-                seats: bookedSeatNumbers,
-                totalPrice,
-                status: "confirmed",
-                paymentStatus: "pending",
-                ticketNumber: generateTicketNumber(),
-                bookingDate: new Date(),
-            });
-
-            await booking.save();
-
-            // 11. Return success response
-            res.status(200).json({
-                message: "Trip booked successfully",
-                ticketNumber: booking.ticketNumber,
-                totalSeats: bookedSeatNumbers.length,
-                tripDetails: {
-                    departure: trip.departureTime,
-                    arrival: trip.arrivalTime,
-                    bookedSeats: bookedSeatNumbers,
-                    totalPrice,
+                if (!tripId || !passengers) {
+                    return res.status(400).json({ message: "Trip ID and passenger count are required" });
                 }
+
+                // 2. Check if user exists
+                const user = await User.findById(userId);
+                if (!user) return res.status(404).json({ message: "User not found" });
+
+                // 3. Find and validate the trip
+                const trip = await Trip.findById(tripId).populate<{ routeId: IRoute, subCompanyId: ISubCompany, busId: IBus, driverId: IUser }>("routeId subCompanyId busId driverId");
+                if (!trip || trip.status !== "pending") {
+                    return res.status(400).json({ message: "Trip is not available for booking" });
+                }
+
+                // 4. Validate passenger count
+                const passengerCount = parseInt(passengers.toString());
+                if (isNaN(passengerCount) || passengerCount <= 0) {
+                    return res.status(400).json({ message: "Invalid passenger count" });
+                }
+
+                // 5. Check seat availability
+                const availableSeats = trip.seats.filter(seat => seat.status === "available");
+                if (availableSeats.length < passengerCount) {
+                    return res.status(400).json({ message: `Only ${availableSeats.length} seat(s) left.` });
+                }
+
+                const pricePerSeat = trip.routeId.price;
+                const totalPrice = passengerCount * pricePerSeat;
+
+
+                const passengersList = [];
+                for (let i = 0; i < passengerCount; i++) {
+                    passengersList.push({
+                        name: i === 0 ? user.name : `Guest ${i} ${user.name}`,
+                        type: i === 0 ? "main" : "guest"
+                    });
+                }
+
+                const result = seatController.reserveSeats(availableSeats, passengersList, userId, totalPrice);
+                if (!result) {
+                    throw new Error("Seat reservation failed.");
+                }
+
+                const [bookedSeatNumbers, allPassengers] = result;
+
+                // await trip.save();
+                const updatedTrip = await Trip.findOneAndUpdate(
+                    {
+                        _id: tripId,
+                    },
+                    {
+                        $set: { seats: trip.seats },
+                    },
+                    {
+                        new: true,
+                        session,
+                    }
+                );
+
+                if(!updatedTrip){
+                    res.status(400).json({message: "Concurrent booking detected"});
+                    return;
+                }
+
+                const booking = new Booking({
+                    user: userId,
+                    trip: updatedTrip._id,
+                    seats: bookedSeatNumbers,
+                    totalPrice,
+                    status: "pending",
+                    paymentStatus: "pending",
+                    ticketNumber: generateTicketNumber(),
+                    bookingDate: new Date(),
+                    allPassengers: allPassengers,
+                });
+
+                await booking.save();
+
+                seatController.scheduleSeatRelease(booking._id);
+
+                const payment = await paypalService.createPayment(
+                    totalPrice,
+                    `Booking for ${trip.routeId.origin} to ${trip.routeId.destination}`,
+                    { bookingId: booking._id.toString() }
+                );
+
+                if (!payment) {
+                    return res.status(400).json({ message: "Failed to create payment" });
+                }
+
+                res.status(200).json({
+                    message: "Trip booked successfully",
+                    ticketNumber: booking.ticketNumber,
+                    totalSeats: bookedSeatNumbers.length,
+                    tripDetails: {
+                        departure: trip.departureTime,
+                        arrival: trip.arrivalTime,
+                        bookedSeats: bookedSeatNumbers,
+                        totalPrice,
+                        approvalUrl: payment.approvalUrl,
+                        orderId: payment.orderId,
+                    }
+                });
+
             });
 
-            const response = await sendTicketEmail(
-                user.email,
-                trip.subCompanyId.companyName,
-                trip as unknown as ITrip,
-                trip.routeId,
-                trip.busId,
-                trip.driverId.name,
-                emailPassengers
-            );
-
-            if (!response) {
-                console.log("Failed to send Email");
-            }
-
+            await session.endSession();
         } catch (error) {
             console.error("bookTrip error:", error);
             return res.status(500).json({ message: "Internal server error" });

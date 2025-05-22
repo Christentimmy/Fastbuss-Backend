@@ -6,15 +6,11 @@ import { roleMiddleware } from "../middlewares/role_middleware";
 const router = express.Router();
 router.use(tokenValidationMiddleware);
 // ==================== USER SEAT ROUTES ====================
-router.get(
-    "/available/:tripId",
-    seatController.getAvailableSeats
-);
 
-router.post(
-    "/reserve/:tripId",
-    seatController.reserveSeats
-);
+// router.post(
+//     "/reserve/:tripId",
+//     seatController.reserveSeats
+// );
 
 router.post(
     "/release/:tripId",

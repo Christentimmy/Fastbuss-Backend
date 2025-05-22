@@ -1,7 +1,8 @@
 import { Request, Response } from "express";
 import { Booking } from "../models/booking_model";
 import { Payment } from '../models/payment_model';
-import { createPayment, handleWebhook } from '../services/paysera_service';
+// import { createPayment, handleWebhook } from '../services/paysera_service';
+import { PayPalService } from '../services/paypal_service';
 import Trip  from "../models/trip_model";
 
 
@@ -10,25 +11,25 @@ import Trip  from "../models/trip_model";
 export const paymentController = {
     // ==================== PAYMENT PROCESSING ====================
     createPayment: async (req: Request, res: Response) => {
-        try {
-            const { tripId, amount } = req.body;
-            const user = res.locals.user;
+        // try {
+        //     const { tripId, amount } = req.body;
+        //     const user = res.locals.user;
 
-            if (!tripId || !amount) {
-                return res.status(400).json({ error: 'Trip ID and amount are required' });
-            }
+        //     if (!tripId || !amount) {
+        //         return res.status(400).json({ error: 'Trip ID and amount are required' });
+        //     }
 
-            const trip = await Trip.findById(tripId);
-            if (!trip) {
-                return res.status(404).json({ error: 'Trip not found' });
-            }
+        //     const trip = await Trip.findById(tripId);
+        //     if (!trip) {
+        //         return res.status(404).json({ error: 'Trip not found' });
+        //     }
 
-            const result = await createPayment(user._id, tripId, amount);
-            res.json(result);
-        } catch (error) {
-            console.error('Error creating payment:', error);
-            res.status(500).json({ error: 'Failed to create payment' });
-        }
+        //     const result = await PayPalService.createPayment(amount);
+        //     res.json(result);
+        // } catch (error) {
+        //     console.error('Error creating payment:', error);
+        //     res.status(500).json({ error: 'Failed to create payment' });
+        // }
     },
 
     confirmPayment: async (req: Request, res: Response) => {
@@ -136,13 +137,13 @@ export const paymentController = {
 
     // ==================== PAYMENT WEBHOOK ====================
     handleWebhook: async (req: Request, res: Response) => {
-        try {
-            const payment = await handleWebhook(req.body);
-            res.json({ success: true, payment });
-        } catch (error) {
-            console.error('Error handling webhook:', error);
-            res.status(500).json({ error: 'Failed to handle webhook' });
-        }
+        // try {
+        //     const payment = await handleWebhook(req.body);
+        //     res.json({ success: true, payment });
+        // } catch (error) {
+        //     console.error('Error handling webhook:', error);
+        //     res.status(500).json({ error: 'Failed to handle webhook' });
+        // }
     },
 
     // ==================== PAYMENT HISTORY ====================

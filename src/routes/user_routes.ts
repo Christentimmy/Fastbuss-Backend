@@ -17,7 +17,7 @@ router.put("/profile", uploadImage.single("profilePicture"), userController.upda
 router.get("/booked-trips", userController.getBookedTrips);
 router.get("/available-trips", userController.getAvailableTrips);
 router.get("/trip-history", userController.getAllTripHistory);
-router.post("/book-trip", userController.altbookTrip);
+router.post("/book-trip", userController.bookTrip);
 router.get("/get-status", userController.getStatus);
 
 // ==================== USER NOTIFICATION ROUTES ====================

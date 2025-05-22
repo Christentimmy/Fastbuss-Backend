@@ -1,18 +1,21 @@
 import mongoose, { Schema, Document, Types } from "mongoose";
+import { Passenger } from "../services/email_service";
 
 export interface IBooking extends Document {
+    _id: Types.ObjectId,
     user: Types.ObjectId;
     trip: Types.ObjectId;
-    seats: number[];
+    seats: string[];
     totalPrice: number;
     status: "pending" | "confirmed" | "cancelled" | "completed";
-    paymentStatus: "pending" | "paid" | "failed" | "refunded";
+    paymentStatus: "pending" | "paid" | "failed" | "refunded" | "cancelled";
     paymentMethod?: string;
     paymentId?: string;
     bookingDate: Date;
     cancellationDate?: Date;
     refundAmount?: number;
     ticketNumber: string;
+    allPassengers: Passenger[];
 }
 
 const BookingSchema = new Schema<IBooking>({
@@ -20,22 +23,29 @@ const BookingSchema = new Schema<IBooking>({
     trip: { type: Schema.Types.ObjectId, ref: 'Trip', required: true },
     seats: [{ type: String, required: true }],
     totalPrice: { type: Number, required: true },
-    status: { 
-        type: String, 
+    status: {
+        type: String,
         enum: ["pending", "confirmed", "cancelled", "completed"],
-        default: "pending" 
+        default: "pending"
     },
-    paymentStatus: { 
-        type: String, 
-        enum: ["pending", "paid", "failed", "refunded"],
-        default: "pending" 
+    paymentStatus: {
+        type: String,
+        enum: ["pending", "paid", "failed", "refunded", "cancelled"],
+        default: "pending"
     },
     paymentMethod: { type: String },
     paymentId: { type: String },
     bookingDate: { type: Date, default: Date.now },
     cancellationDate: { type: Date },
     refundAmount: { type: Number },
-    ticketNumber: { type: String, required: true, unique: true }
+    ticketNumber: { type: String, required: true, unique: true },
+    allPassengers: [{
+        name: { type: String, required: true },
+        seat: { type: String, required: true },
+        price: { type: Number, required: true },
+        type: { type: String, enum: ["main", "guest"], default: "main" },
+        seatId: { type: Schema.Types.ObjectId, default: null },
+    }],
 }, { timestamps: true });
 
 
