@@ -186,43 +186,54 @@ export const userController = {
     },
 
     bookTrip: async (req: Request, res: Response) => {
-        try {
-            const session = await mongoose.startSession();
+        const session = await mongoose.startSession();
 
-            await session.withTransaction(async () => {
+        try {
+            const result = await session.withTransaction(async () => {
                 // 1. Get user ID and validate input
                 const userId = res.locals.userId;
                 const { tripId, passengers } = req.body;
 
                 if (!tripId || !passengers) {
-                    return res.status(400).json({ message: "Trip ID and passenger count are required" });
+                    throw new Error("Trip ID and passenger count are required");
                 }
 
-                // 2. Check if user exists
-                const user = await User.findById(userId);
-                if (!user) return res.status(404).json({ message: "User not found" });
+                // 2. Check if user exists (within transaction)
+                const user = await User.findById(userId).session(session);
+                if (!user) throw new Error("User not found");
 
-                // 3. Find and validate the trip
-                const trip = await Trip.findById(tripId).populate<{ routeId: IRoute, subCompanyId: ISubCompany, busId: IBus, driverId: IUser }>("routeId subCompanyId busId driverId");
-                if (!trip || trip.status !== "pending") {
-                    return res.status(400).json({ message: "Trip is not available for booking" });
-                }
-
-                // 4. Validate passenger count
+                // 3. Validate passenger count
                 const passengerCount = parseInt(passengers.toString());
                 if (isNaN(passengerCount) || passengerCount <= 0) {
-                    return res.status(400).json({ message: "Invalid passenger count" });
+                    throw new Error("Invalid passenger count");
                 }
 
-                // 5. Check seat availability
-                const availableSeats = trip.seats.filter(seat => seat.status === "available");
-                if (availableSeats.length < passengerCount) {
-                    return res.status(400).json({ message: `Only ${availableSeats.length} seat(s) left.` });
+                // 4. Find trip and check availability atomically
+                const trip = await Trip.findOneAndUpdate(
+                    {
+                        _id: tripId,
+                        status: "pending",
+                        $expr: {
+                            $gte: [
+                                { $size: { $filter: { input: "$seats", cond: { $eq: ["$$this.status", "available"] } } } },
+                                passengerCount
+                            ]
+                        }
+                    },
+                    {}, // No update, just finding
+                    {
+                        session,
+                        populate: "routeId subCompanyId busId driverId"
+                    }
+                ) as (ITrip & { routeId: IRoute, subCompanyId: ISubCompany, busId: IBus }) | null;
+
+                if (!trip) {
+                    throw new Error("Trip is not available for booking or insufficient seats");
                 }
 
+                // 5. Reserve seats atomically
                 const pricePerSeat = trip.routeId.price;
                 const totalPrice = passengerCount * pricePerSeat;
-
 
                 const passengersList = [];
                 for (let i = 0; i < passengerCount; i++) {
@@ -232,35 +243,24 @@ export const userController = {
                     });
                 }
 
-                const result = seatController.reserveSeats(availableSeats, passengersList, userId, totalPrice);
-                if (!result) {
-                    throw new Error("Seat reservation failed.");
-                }
+                // Get available seats within the transaction
+                const availableSeats = trip.seats.filter(seat => seat.status === "available");
 
-                const [bookedSeatNumbers, allPassengers] = result;
-
-                // await trip.save();
-                const updatedTrip = await Trip.findOneAndUpdate(
-                    {
-                        _id: tripId,
-                    },
-                    {
-                        $set: { seats: trip.seats },
-                    },
-                    {
-                        new: true,
-                        session,
-                    }
+                const reservationResult = await seatController.reserveSeats(
+                    availableSeats,
+                    passengersList,
+                    userId,
+                    totalPrice,
+                    tripId,
+                    session
                 );
 
-                if(!updatedTrip){
-                    res.status(400).json({message: "Concurrent booking detected"});
-                    return;
-                }
+                const [bookedSeatNumbers, allPassengers] = reservationResult;
 
+                // 6. Create booking
                 const booking = new Booking({
                     user: userId,
-                    trip: updatedTrip._id,
+                    trip: tripId,
                     seats: bookedSeatNumbers,
                     totalPrice,
                     status: "pending",
@@ -270,10 +270,9 @@ export const userController = {
                     allPassengers: allPassengers,
                 });
 
-                await booking.save();
+                await booking.save({ session });
 
-                seatController.scheduleSeatRelease(booking._id);
-
+                // 7. Create payment
                 const payment = await paypalService.createPayment(
                     totalPrice,
                     `Booking for ${trip.routeId.origin} to ${trip.routeId.destination}`,
@@ -281,10 +280,20 @@ export const userController = {
                 );
 
                 if (!payment) {
-                    return res.status(400).json({ message: "Failed to create payment" });
+                    await session.abortTransaction();
+                    return res.status(400).json({message: "Failed to create payment"});
                 }
 
-                res.status(200).json({
+                // Update booking with PayPal order ID
+                booking.orderId = payment.orderId;
+                await booking.save({ session });
+
+                // Schedule seat release after transaction commits
+                process.nextTick(() => {
+                    seatController.scheduleSeatRelease(booking._id);
+                });
+
+                return {
                     message: "Trip booked successfully",
                     ticketNumber: booking.ticketNumber,
                     totalSeats: bookedSeatNumbers.length,
@@ -296,14 +305,31 @@ export const userController = {
                         approvalUrl: payment.approvalUrl,
                         orderId: payment.orderId,
                     }
-                });
-
+                };
             });
 
-            await session.endSession();
+            res.status(200).json(result);
+
         } catch (error) {
             console.error("bookTrip error:", error);
+
+            // Handle specific error types
+            if (error instanceof Error) {
+                if (error.message.includes("Trip is not available") ||
+                    error.message.includes("insufficient seats") ||
+                    error.message.includes("already taken")) {
+                    return res.status(400).json({ message: error.message });
+                } else if (error.message.includes("not found")) {
+                    return res.status(404).json({ message: error.message });
+                } else if (error.message.includes("required") ||
+                    error.message.includes("Invalid")) {
+                    return res.status(400).json({ message: error.message });
+                }
+            }
+
             return res.status(500).json({ message: "Internal server error" });
+        } finally {
+            await session.endSession();
         }
     },
 

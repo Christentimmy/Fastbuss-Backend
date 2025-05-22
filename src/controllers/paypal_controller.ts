@@ -33,12 +33,14 @@ export class PayPalController {
           if (bookingId) {
             seatController.cancelScheduledRelease(bookingId);
             const booking = await Booking.findById(bookingId);
-            if (booking) {
-            await seatController.markSeatsAsBooked(bookingId);  
+            if (booking && booking.paymentStatus === "pending") {
+              await seatController.markSeatsAsBooked(bookingId);
               booking.paymentStatus = 'paid';
               booking.status = 'confirmed';
               await booking.save();
               console.log(`Booking ${booking.paymentStatus} payment status updated to paid`);
+            } else {
+              res.json({ message: "payment already handled" });
             }
           }
           break;

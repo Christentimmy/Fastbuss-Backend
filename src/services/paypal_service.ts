@@ -62,7 +62,8 @@ export class PayPalService {
             user_action: 'PAY_NOW',
             shipping_preference: 'NO_SHIPPING',
             landing_page: 'BILLING'
-          }
+          },
+          expiration_time: new Date(Date.now() + 5 * 60 * 1000).toISOString()
         },
         {
           headers: {

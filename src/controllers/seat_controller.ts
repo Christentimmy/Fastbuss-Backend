@@ -16,8 +16,17 @@ const pendingReleases = new Map<string, NodeJS.Timeout>();
 
 export const seatController = {
     // ==================== SEAT MANAGEMENT ====================
-    reserveSeats: (availableSeats: ISeat[], passengersList: Array<any>, userId: Types.ObjectId, basePrice: number): [string[], Passenger[]] => {
+    
+    reserveSeats: async (
+        availableSeats: ISeat[],
+        passengersList: Array<any>,
+        userId: Types.ObjectId,
+        basePrice: number,
+        tripId: string,
+        session: any
+    ): Promise<[string[], Passenger[]]> => {
         try {
+            // Input validation
             if (!Array.isArray(availableSeats) || !Array.isArray(passengersList)) {
                 throw new Error("Invalid input: availableSeats and passengersList must be arrays");
             }
@@ -34,30 +43,51 @@ export const seatController = {
                 throw new Error("Invalid user ID");
             }
 
-            const bookedSeatNumbers: any = [];
+            const bookedSeatNumbers: string[] = [];
             const allPassengers: Passenger[] = [];
+            const now = new Date();
 
-            const seatsToReserve = availableSeats.slice(0, passengersList.length);
-            seatsToReserve.forEach((seat, index) => {
-                const passenger = passengersList[index];
-
-                seat.status = 'reserved';
-                seat.userId = userId;
-                seat.bookedAt = new Date();
-                seat.reservedAt = new Date();
-                seat.passengerName = passenger.name;
-                seat.passengerType = passenger.type;
+            // Prepare bulk operations with optimistic concurrency
+            const operations = passengersList.map((passenger, index) => {
+                const seat = availableSeats[index];
 
                 bookedSeatNumbers.push(seat.seatNumber);
-
                 allPassengers.push({
                     name: passenger.name,
                     seat: seat.seatNumber,
                     price: basePrice,
                     type: passenger.type,
-                    seatId: seat._id,
+                    seatId: seat._id
                 });
+
+                return {
+                    updateOne: {
+                        filter: {
+                            _id: tripId,
+                            "seats._id": seat._id,
+                            "seats.status": "available" // Ensure seat is still available
+                        },
+                        update: {
+                            $set: {
+                                "seats.$.status": "reserved",
+                                "seats.$.userId": userId,
+                                "seats.$.bookedAt": now,
+                                "seats.$.reservedAt": now,
+                                "seats.$.passengerName": passenger.name,
+                                "seats.$.passengerType": passenger.type
+                            }
+                        }
+                    }
+                };
             });
+
+            // Execute bulk write with session
+            const result = await Trip.bulkWrite(operations, { session });
+
+            // Verify all seats were successfully reserved
+            if (result.modifiedCount < passengersList.length) {
+                throw new Error(`Some seats were already taken. Only ${result.modifiedCount} out of ${passengersList.length} seats were reserved. Please try again.`);
+            }
 
             return [bookedSeatNumbers, allPassengers];
 
@@ -68,57 +98,31 @@ export const seatController = {
     },
 
     releaseSeats: async (bookingId: Types.ObjectId) => {
-        try {
-            const booking = await Booking.findById(bookingId);
-            if (!booking) {
-                throw new Error("Booking not found");
-            }
-
-            if (booking.paymentStatus !== "pending") {
-                return;
-            }
-
-            const trip = await Trip.findById(booking.trip);
-            if (!trip) {
-                throw new Error("Trip not found");
-            }
-
-            // Get the seats that need to be released
-            const seatsToRelease = trip.seats.filter(seat => 
-                booking.seats.includes(seat.seatNumber) && 
-                seat.status === "reserved" &&
-                seat.userId?.toString() === booking.user.toString()
-            );
-
-
-            const updatedSeats = trip.seats.map(seat => {
-                if (seatsToRelease.some(s => s.seatNumber === seat.seatNumber)) {
-                    return {
-                        ...seat,
-                        status: "available" as const,
-                        userId: null,
-                        passengerName: null,
-                        reservedAt: null,
-                        bookedAt: null,
-                        passengerType: null,
-                    };
+        const booking = await Booking.findById(bookingId);
+        if (!booking || booking.status === 'confirmed') return;
+    
+        await Trip.updateOne(
+            { _id: booking.trip },
+            {
+                $set: {
+                    "seats.$[elem].status": "available",
+                    "seats.$[elem].userId": null,
+                    "seats.$[elem].bookedAt": null,
+                    "seats.$[elem].reservedAt": null,
+                    "seats.$[elem].passengerName": null,
+                    "seats.$[elem].passengerType": null
                 }
-                return seat;
-            });
-
-            // Update trip and booking
-            trip.seats = updatedSeats;
-            await trip.save();
-
-            booking.status = "cancelled";
-            booking.paymentStatus = "failed";
-            await booking.save();
-
-            return true;
-        } catch (error) {
-            console.error("releaseSeats error:", error);
-            throw error;
-        }
+            },
+            {
+                arrayFilters: [
+                    { "elem._id": { $in: booking.allPassengers.map(p => p.seatId) } }
+                ]
+            }
+        );
+    
+        booking.status = 'expired';
+        booking.paymentStatus = 'failed';
+        await booking.save();
     },
 
     markSeatsAsBooked: async (bookingId: Types.ObjectId) => {
@@ -126,12 +130,12 @@ export const seatController = {
             if (!bookingId) {
                 throw Error("Booking is required");
             }
-            const booking = await Booking.findById(bookingId).populate<{user: IUser}>("user");
+            const booking = await Booking.findById(bookingId).populate<{ user: IUser }>("user");
             if (!booking) {
                 throw Error("Booking not found");
             }
-        
-            const trip = await Trip.findById(booking.trip).populate<{subCompanyId: ISubCompany, driverId: IUser, routeId: IRoute, busId: IBus}>("subCompanyId driverId routeId busId");
+
+            const trip = await Trip.findById(booking.trip).populate<{ subCompanyId: ISubCompany, driverId: IUser, routeId: IRoute, busId: IBus }>("subCompanyId driverId routeId busId");
             if (!trip) throw Error("Trip Not Found");
 
             const allPassengers: Passenger[] = booking.allPassengers;

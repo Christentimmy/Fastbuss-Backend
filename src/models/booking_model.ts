@@ -7,7 +7,7 @@ export interface IBooking extends Document {
     trip: Types.ObjectId;
     seats: string[];
     totalPrice: number;
-    status: "pending" | "confirmed" | "cancelled" | "completed";
+    status: "pending" | "confirmed" | "cancelled" | "completed" | "expired";
     paymentStatus: "pending" | "paid" | "failed" | "refunded" | "cancelled";
     paymentMethod?: string;
     paymentId?: string;
@@ -16,6 +16,7 @@ export interface IBooking extends Document {
     refundAmount?: number;
     ticketNumber: string;
     allPassengers: Passenger[];
+    orderId: string | null;
 }
 
 const BookingSchema = new Schema<IBooking>({
@@ -25,7 +26,7 @@ const BookingSchema = new Schema<IBooking>({
     totalPrice: { type: Number, required: true },
     status: {
         type: String,
-        enum: ["pending", "confirmed", "cancelled", "completed"],
+        enum: ["pending", "confirmed", "cancelled", "completed", "expired"],
         default: "pending"
     },
     paymentStatus: {
@@ -46,6 +47,7 @@ const BookingSchema = new Schema<IBooking>({
         type: { type: String, enum: ["main", "guest"], default: "main" },
         seatId: { type: Schema.Types.ObjectId, default: null },
     }],
+    orderId: { type: String, default: null },
 }, { timestamps: true });
 
 
