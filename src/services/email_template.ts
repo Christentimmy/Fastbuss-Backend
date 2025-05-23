@@ -496,7 +496,8 @@ export function generateBookingEmailTemplate(
     route: IRoute,
     bus: IBus,
     driverName: string,
-    passengers: Passenger[]
+    passengers: Passenger[],
+    ticketNumber: string
 ) {
     // Format dates
     const departureDate = new Date(trip.departureTime).toLocaleDateString('en-US', { 
@@ -641,7 +642,8 @@ export function generateBookingEmailTemplate(
       </div>
       <div>
           <h3 class="font-semibold text-green-800 text-sm">Booking Confirmed!</h3>
-              <p class="text-xs text-blue-800">${passengers.length} tickets booked successfully</p>
+          <p class="text-xs text-blue-800">${passengers.length} tickets booked successfully</p>
+          <p class="text-xs text-blue-800 mt-1">Ticket #${ticketNumber}</p>
       </div>
   </div>
   

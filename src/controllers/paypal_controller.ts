@@ -60,7 +60,7 @@ export class PayPalController {
         case 'PAYMENT.CAPTURE.DENIED':
           console.log('Payment denied:', event.resource);
           const deniedTripId = event.resource.custom_id || event.resource.reference_id;
-          
+
           break;
         case 'PAYMENT.REFUND.COMPLETED':
           console.log('Refund completed:', event.resource);
@@ -99,7 +99,8 @@ export class PayPalController {
 
       if (timeDiff > 5) {
         console.log(`Payment received after expiration for booking ${bookingId}`);
-        return res.status(400).json({ message: "Payment expired" });
+        res.redirect(`fastbuss://payment-cancelled`);
+        // return res.status(400).json({ message: "Payment expired" });
       }
 
       seatController.cancelScheduledRelease(new Types.ObjectId(bookingId as string));
@@ -110,7 +111,8 @@ export class PayPalController {
       await booking.save();
       console.log("Payment successful From CallBack");
 
-      res.json({ message: "Payment successful" });
+      // res.json({ message: "Payment successful" });
+      res.redirect(`fastbuss://payment-success?bookingId=${bookingId}`);
     } catch (error) {
       console.log("❌ Error in payment success", error);
       res.status(500).json({ message: "Error in payment success" });
@@ -133,13 +135,15 @@ export class PayPalController {
       await booking.save();
       console.log(`Trip ${bookingId} payment status updated to cancelled`);
 
-      // await seatController.releaseSeats(booking._id);
+      await seatController.releaseSeats(booking._id, "cancelled", "cancelled");
 
-      res.json({ message: "Payment cancelled" });
+      // res.json({ message: "Payment cancelled" });
+      res.redirect(`fastbuss://payment-expired`);
     } catch (error) {
       console.log("❌ Error in payment cancelled", error);
       res.status(500).json({ message: "Error in payment cancelled" });
     }
   }
+
 
 }

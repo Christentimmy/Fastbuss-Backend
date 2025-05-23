@@ -1028,7 +1028,7 @@ export const subCompanyController = {
                 return res.status(400).json({ message: "Bus is already assigned to another route during this time" });
             }
 
-            const seats = seatController.initializeSeats(bus.capacity);
+            const seats = await seatController.initializeSeats(bus.capacity);
             if (!seats) {
                 return;
             }

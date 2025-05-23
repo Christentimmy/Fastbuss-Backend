@@ -193,19 +193,20 @@ export const userController = {
                 // 1. Get user ID and validate input
                 const userId = res.locals.userId;
                 const { tripId, passengers } = req.body;
-
                 if (!tripId || !passengers) {
-                    throw new Error("Trip ID and passenger count are required");
+                    res.status(400).json({ message: "Trip ID and passenger count are required" })
+                    return;
                 }
 
                 // 2. Check if user exists (within transaction)
                 const user = await User.findById(userId).session(session);
-                if (!user) throw new Error("User not found");
+                if (!user) return res.json({ message: "user not found" });
 
                 // 3. Validate passenger count
                 const passengerCount = parseInt(passengers.toString());
                 if (isNaN(passengerCount) || passengerCount <= 0) {
-                    throw new Error("Invalid passenger count");
+                    res.json({ message: "Invalid passenger count" });
+                    return;
                 }
 
                 // 4. Find trip and check availability atomically
@@ -228,7 +229,8 @@ export const userController = {
                 ) as (ITrip & { routeId: IRoute, subCompanyId: ISubCompany, busId: IBus }) | null;
 
                 if (!trip) {
-                    throw new Error("Trip is not available for booking or insufficient seats");
+                    res.json({ message: "Trip is not available for booking or insufficient seats" });
+                    return;
                 }
 
                 // 5. Reserve seats atomically
@@ -281,7 +283,7 @@ export const userController = {
 
                 if (!payment) {
                     await session.abortTransaction();
-                    return res.status(400).json({message: "Failed to create payment"});
+                    return res.status(400).json({ message: "Failed to create payment" });
                 }
 
                 // Update booking with PayPal order ID
@@ -295,9 +297,9 @@ export const userController = {
 
                 return {
                     message: "Trip booked successfully",
-                    ticketNumber: booking.ticketNumber,
-                    totalSeats: bookedSeatNumbers.length,
-                    tripDetails: {
+                    data: {
+                        ticketNumber: booking.ticketNumber,
+                        totalSeats: bookedSeatNumbers.length,
                         departure: trip.departureTime,
                         arrival: trip.arrivalTime,
                         bookedSeats: bookedSeatNumbers,

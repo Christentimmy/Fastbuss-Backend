@@ -71,9 +71,10 @@ export async function sendTicketEmail(
     route: IRoute,
     bus: IBus,
     driverName: string,
-    passengers: Passenger[]
+    passengers: Passenger[],
+    ticketNumber: string,
 ) {
-    const html = generateBookingEmailTemplate(companyName, trip, route, bus, driverName, passengers);
+    const html = generateBookingEmailTemplate(companyName, trip, route, bus, driverName, passengers, ticketNumber);
     // const imageBuffer = await convertHtmlToImage(html);
     const imageBuffer = await generatePDF(html);
 

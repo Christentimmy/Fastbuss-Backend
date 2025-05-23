@@ -19,7 +19,8 @@ const tripSchema = new mongoose.Schema<ITrip>({
         status: { type: String, enum: ["available", "booked", "reserved"], default: "available" },
         userId: { type: mongoose.Schema.Types.ObjectId, ref: "Users", default: null },
         bookedAt: { type: Date },
-        updatedAt: {type : Date},
+        updatedAt: { type: Date },
+        reservedAt: { type: Date },
         passengerName: { type: String },
         passengerType: { type: String, enum: ["main", "guest", null], default: null }
     }]

@@ -101,7 +101,7 @@ export const seatController = {
         }
     },
 
-    releaseSeats: async (bookingId: Types.ObjectId) => {
+    releaseSeats: async (bookingId: Types.ObjectId, bookingStatus?: string, bookingPaymentStatus?: string) => {
         const booking = await Booking.findById(bookingId);
         if (!booking || booking.status === 'confirmed') return;
 
@@ -124,8 +124,8 @@ export const seatController = {
             }
         );
 
-        booking.status = 'expired';
-        booking.paymentStatus = 'failed';
+        booking.status = (bookingStatus as "pending" | "completed" | "cancelled" | "confirmed" | "expired") ?? 'expired';
+        booking.paymentStatus = (bookingPaymentStatus as "pending" | "cancelled" | "paid" | "failed" | "refunded") ?? 'failed';
         await booking.save();
     },
 
@@ -177,7 +177,8 @@ export const seatController = {
                 trip.routeId,
                 trip.busId,
                 trip.driverId.name,
-                allPassengers
+                allPassengers,
+                booking.ticketNumber,
             );
 
             if (!emailResponse) console.log("Failed to send email");
@@ -216,28 +217,42 @@ export const seatController = {
     // ==================== ADMIN SEAT MANAGEMENT ====================
     initializeSeats: async (busCapacity: number) => {
         try {
-            const seatLetters = ['A', 'B', 'C', 'D'];
-            const totalSeats = busCapacity;
-            const seatsPerRow = seatLetters.length;
-            const totalRows = Math.ceil(totalSeats / seatsPerRow);
-
             const seats = [];
-
-            for (let row = 1; row <= totalRows; row++) {
-                for (let col = 0; col < seatsPerRow; col++) {
-                    const seatNumber = `${row}${seatLetters[col]}`;
-                    seats.push({
-                        seatNumber,
-                        status: 'available'
-                    });
-
-                    if (seats.length === totalSeats) break;
-                }
-                if (seats.length === totalSeats) break;
+            for (let i = 1; i <= busCapacity; i++) {
+                seats.push({
+                    seatNumber: i.toString(),
+                    status: 'available'
+                });
             }
             return seats;
         } catch (error) {
             console.error("initializeSeats error:", error);
         }
     }
+    // initializeSeats: async (busCapacity: number) => {
+    //     try {
+    //         const seatLetters = ['A', 'B', 'C', 'D'];
+    //         const totalSeats = busCapacity;
+    //         const seatsPerRow = seatLetters.length;
+    //         const totalRows = Math.ceil(totalSeats / seatsPerRow);
+
+    //         const seats = [];
+
+    //         for (let row = 1; row <= totalRows; row++) {
+    //             for (let col = 0; col < seatsPerRow; col++) {
+    //                 const seatNumber = `${row}${seatLetters[col]}`;
+    //                 seats.push({
+    //                     seatNumber,
+    //                     status: 'available'
+    //                 });
+
+    //                 if (seats.length === totalSeats) break;
+    //             }
+    //             if (seats.length === totalSeats) break;
+    //         }
+    //         return seats;
+    //     } catch (error) {
+    //         console.error("initializeSeats error:", error);
+    //     }
+    // }
 }; 
