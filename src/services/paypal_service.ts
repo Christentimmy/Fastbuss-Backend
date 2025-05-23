@@ -31,31 +31,31 @@ export class PayPalService {
           intent: 'CAPTURE',
           purchase_units: [
             {
-            items: [
-              {
-                name: 'Bus Service Payment',
-                quantity: 1,
-                description: description,
-                unit_amount: {
-                  currency_code: 'EUR',
-                  value: amount.toString()
-                },
-              }
-            ],
-            amount: {
-              currency_code: 'EUR',
-              value: amount.toString(),
-              breakdown: {
-                item_total: {
-                  currency_code: 'EUR',
-                  value: amount.toString()
+              items: [
+                {
+                  name: 'Bus Service Payment',
+                  quantity: 1,
+                  description: description,
+                  unit_amount: {
+                    currency_code: 'EUR',
+                    value: amount.toString()
+                  },
                 }
-              }
+              ],
+              amount: {
+                currency_code: 'EUR',
+                value: amount.toString(),
+                breakdown: {
+                  item_total: {
+                    currency_code: 'EUR',
+                    value: amount.toString()
+                  }
+                }
+              },
+              custom_id: metadata.bookingId,
+              reference_id: metadata.bookingId
             },
-            custom_id: metadata.bookingId,
-            reference_id: metadata.bookingId
-          },
-        ],
+          ],
           application_context: {
             return_url: `${paypalConfig.frontendUrl}/api/v1/paypal/payment-success?bookingId=${metadata.bookingId}`,
             cancel_url: `${paypalConfig.frontendUrl}/api/v1/paypal/payment-cancelled?bookingId=${metadata.bookingId}`,
@@ -91,22 +91,28 @@ export class PayPalService {
   }
 
   async capturePayment(orderId: string) {
-    try {
-      const accessToken = await this.getAccessToken();
-      const response = await axios.post(
-        `${paypalConfig.baseUrl}/v2/checkout/orders/${orderId}/capture`,
-        {},
-        {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-      return response.data;
-    } catch (error) {
-      throw new Error('Failed to capture PayPal payment');
+    const accessToken = await this.getAccessToken();
+
+    const response = await axios.post(
+      `${paypalConfig.baseUrl}/v2/checkout/orders/${orderId}/capture`,
+      {},
+      {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    const captureId = response.data.purchase_units?.[0]?.payments?.captures?.[0]?.id;
+    if (!captureId) {
+      throw new Error('Capture ID not found');
     }
+
+    return {
+      data: response.data,
+      captureId
+    };
   }
 
   async refundPayment(captureId: string, amount: number, currency: string = 'EUR') {
@@ -159,4 +165,5 @@ export class PayPalService {
       throw new Error('Failed to verify webhook signature');
     }
   }
+
 }

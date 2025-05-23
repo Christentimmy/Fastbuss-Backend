@@ -10,13 +10,17 @@ import { IUser } from "../types/user_types";
 import { ITrip } from "../types/trip_types";
 import { IRoute } from "../types/route_types";
 import { IBus } from "../types/bus_types";
+import { PayPalService } from "../services/paypal_service";
+import mongoose from "mongoose";
+
+const paypalService = new PayPalService();
 
 // Store pending releases
 const pendingReleases = new Map<string, NodeJS.Timeout>();
 
 export const seatController = {
     // ==================== SEAT MANAGEMENT ====================
-    
+
     reserveSeats: async (
         availableSeats: ISeat[],
         passengersList: Array<any>,
@@ -100,7 +104,7 @@ export const seatController = {
     releaseSeats: async (bookingId: Types.ObjectId) => {
         const booking = await Booking.findById(bookingId);
         if (!booking || booking.status === 'confirmed') return;
-    
+
         await Trip.updateOne(
             { _id: booking.trip },
             {
@@ -119,35 +123,38 @@ export const seatController = {
                 ]
             }
         );
-    
+
         booking.status = 'expired';
         booking.paymentStatus = 'failed';
         await booking.save();
     },
 
     markSeatsAsBooked: async (bookingId: Types.ObjectId) => {
-        try {
-            if (!bookingId) {
-                throw Error("Booking is required");
-            }
-            const booking = await Booking.findById(bookingId).populate<{ user: IUser }>("user");
-            if (!booking) {
-                throw Error("Booking not found");
-            }
+        const session = await mongoose.startSession();
+        session.startTransaction();
 
-            const trip = await Trip.findById(booking.trip).populate<{ subCompanyId: ISubCompany, driverId: IUser, routeId: IRoute, busId: IBus }>("subCompanyId driverId routeId busId");
-            if (!trip) throw Error("Trip Not Found");
+        try {
+            if (!bookingId) throw Error("Booking is required");
+
+            const booking = await Booking.findById(bookingId).populate<{ user: IUser }>("user").session(session);
+            if (!booking) throw Error("Booking not found");
+
+            const trip = await Trip.findById(booking.trip)
+                .populate<{ subCompanyId: ISubCompany, driverId: IUser, routeId: IRoute, busId: IBus }>("subCompanyId driverId routeId busId")
+                .session(session);
+            if (!trip) throw Error("Trip not found");
 
             const allPassengers: Passenger[] = booking.allPassengers;
-            if (!allPassengers || allPassengers.length === 0) {
-                throw Error("No Passengers for this booking found");
-            }
+            if (!allPassengers || allPassengers.length === 0) throw Error("No passengers for this booking");
 
             const allSeats = trip.seats;
             const updatedSeats: ISeat[] = allSeats.map(seat => {
                 const passenger = allPassengers.find(p => p.seatId!.toString() === seat._id.toString());
 
                 if (passenger) {
+                    // ⚠️ Prevent double-booking by checking if the seat is already booked
+                    if (seat.status === "booked") throw new Error(`Seat ${seat._id} is already booked`);
+
                     return {
                         ...seat,
                         status: "booked",
@@ -161,24 +168,25 @@ export const seatController = {
             });
 
             trip.seats = updatedSeats;
-            await trip.save();
+            await trip.save({ session });
 
-
-            const response = await sendTicketEmail(
+            const emailResponse = await sendTicketEmail(
                 booking.user.email,
                 trip.subCompanyId.companyName,
                 trip as unknown as ITrip,
                 trip.routeId,
                 trip.busId,
                 trip.driverId.name,
-                allPassengers,
+                allPassengers
             );
 
-            if (!response) {
-                console.log("Failed to send Email");
-            }
+            if (!emailResponse) console.log("Failed to send email");
 
+            await session.commitTransaction();
+            session.endSession();
         } catch (error) {
+            await session.abortTransaction();
+            session.endSession();
             console.error("markSeatsAsBooked error:", error);
             throw error;
         }

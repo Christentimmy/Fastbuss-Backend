@@ -17,6 +17,7 @@ export interface IBooking extends Document {
     ticketNumber: string;
     allPassengers: Passenger[];
     orderId: string | null;
+    captureId: string | null;
 }
 
 const BookingSchema = new Schema<IBooking>({
@@ -48,6 +49,7 @@ const BookingSchema = new Schema<IBooking>({
         seatId: { type: Schema.Types.ObjectId, default: null },
     }],
     orderId: { type: String, default: null },
+    captureId: { type: String, default: null },
 }, { timestamps: true });
 
 
