@@ -10,12 +10,10 @@ import { IBus } from "../types/bus_types";
 import { ISubCompany } from "../types/sub_company_types";
 import { Booking } from "../models/booking_model";
 import { generateTicketNumber } from "../utils/generate_booking_number";
-import { sendTicketEmail } from "../services/email_service";
-import { IUser } from "../types/user_types";
-import { ITrip } from "@/types/trip_types";
+import { ITrip } from "../types/trip_types";
 import { PayPalService } from '../services/paypal_service';
 import { seatController } from "./seat_controller";
-import mongoose from "mongoose";
+import mongoose, { Document } from "mongoose";
 
 const paypalService = new PayPalService();
 
@@ -262,7 +260,7 @@ export const userController = {
                 // 6. Create booking
                 const booking = new Booking({
                     user: userId,
-                    trip: tripId,
+                    trip: trip._id,
                     seats: bookedSeatNumbers,
                     totalPrice,
                     status: "pending",
@@ -352,6 +350,39 @@ export const userController = {
         }
     },
 
+    cancelTrip: async (req: Request, res: Response) => {
+        try {
+            const { bookingId } = req.body;
+            if (!bookingId) {
+                res.status(404).json({ message: "Booking Id is required" });
+                return;
+            }
+            const booking = await Booking.findById(bookingId).populate<{ trip: ITrip }>("trip");
+            if (!booking) {
+                res.status(400).json({ message: "Booking not found" });
+                return;
+            }
+            if (booking.trip.status === "completed" || booking.status !== "confirmed" || booking.paymentStatus !== "paid") {
+                res.status(400).json({ message: "You cannot be refunded" });
+                return;
+            }
+            if (!booking.captureId) {
+                res.status(400).json({ message: "Your booking was not captured, contact support" });
+                return;
+            }
+            await seatController.releaseSeats(booking._id, "cancelled", "refunded");
+            const response = await paypalService.refundPayment(booking.captureId, booking.totalPrice);
+            if (!response) {
+                res.status(400).json({ message: "Refund failed contact support" });
+                return;
+            }
+            res.status(200).json({ message: "Trip Cancelled and refund initiated" });
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ message: "Internal server error" });
+        }
+    },
+
     getAvailableTrips: async (req: Request, res: Response) => {
         try {
             const user = res.locals.user;
@@ -432,8 +463,42 @@ export const userController = {
                 return res.status(404).json({ message: "User not found" });
             }
 
-            const tripHistory = await Trip.find({ "seats.userId": userId });
-            res.status(200).json({ message: "Trip history fetched successfully", data: tripHistory });
+            const bookings = await Booking.find({ user: user._id })
+                .populate<{
+                    trip: ITrip & {
+                        routeId: IRoute;
+                        busId: IBus;
+                        subCompanyId: ISubCompany;
+                    };
+                }>({
+                    path: 'trip',
+                    populate: [
+                        { path: 'routeId', select: 'origin destination price' },
+                        { path: 'busId', select: 'name plateNumber type' },
+                        { path: 'subCompanyId', select: 'companyName logo' }
+                    ]
+                })
+                .lean();
+
+            const response = bookings.map(booking => {
+                return {
+                    _id: booking.trip._id,
+                    origin: booking.trip.routeId.origin,
+                    destination: booking.trip.routeId.destination,
+                    price: booking.totalPrice,
+                    seats: booking.seats,
+                    ticketNumber: booking.ticketNumber,
+                    status: booking.status,
+                    departureDate: booking.trip.departureTime,
+                    arrivalDate: booking.trip.arrivalTime,
+                    busName: booking.trip.busId.name,
+                    busType: booking.trip.busId.type,
+                    companyName: booking.trip.subCompanyId.companyName,
+                    companyLogo: booking.trip.subCompanyId.logo,
+                };
+            });
+
+          res.status(200).json({ message: "Trip history fetched successfully", data: response });
         } catch (error) {
             console.error("getAllTripHistory error:", error);
             res.status(500).json({ message: "Internal server error" });
