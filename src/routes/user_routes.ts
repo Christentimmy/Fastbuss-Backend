@@ -22,6 +22,6 @@ router.post("/update-profile", userController.updateProfile);
 router.get("/get-status", userController.getStatus);
 
 // ==================== USER ACCOUNT ROUTES ====================
-router.delete("/account", userController.deleteAccount);
+router.delete("/delete-account", userController.deleteAccount);
 
 export default router;

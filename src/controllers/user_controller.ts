@@ -106,6 +106,9 @@ export const userController = {
 
     // ==================== USER ACCOUNT ====================
     deleteAccount: async (req: Request, res: Response) => {
+        const session = await mongoose.startSession();
+        session.startTransaction();
+
         try {
             const userId = res.locals.userId;
             const { password } = req.body;
@@ -114,21 +117,31 @@ export const userController = {
                 return res.status(400).json({ message: "Password is required" });
             }
 
-            const user = await User.findById(userId);
+            const user = await User.findById(userId).session(session);
             if (!user) {
                 return res.status(404).json({ message: "User not found" });
             }
 
+            // Verify password
             const isMatch = await bcrypt.compare(password, user.password);
             if (!isMatch) {
                 return res.status(400).json({ message: "Password is incorrect" });
             }
 
-            await User.findByIdAndDelete(userId);
+            // Delete user and their bookings in a transaction
+            await Promise.all([
+                User.findByIdAndDelete(userId).session(session),
+                Booking.deleteMany({ user: userId }).session(session)
+            ]);
+
+            await session.commitTransaction();
             res.status(200).json({ message: "Account deleted successfully" });
         } catch (error) {
+            await session.abortTransaction();
             console.error("deleteAccount error:", error);
             res.status(500).json({ message: "Internal server error" });
+        } finally {
+            session.endSession();
         }
     },
 

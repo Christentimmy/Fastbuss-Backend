@@ -55,13 +55,8 @@ export const authController = {
         try {
             const { name, email, password, role } = req.body;
 
-            if (!name || !email || !password || !role) {
+            if (!name || !email || !password) {
                 res.status(400).json({ message: "Name,Email,Password and Role are required" });
-                return;
-            }
-
-            if (role !== "user" && role !== "sub_admin" && role !== "super_admin" && role !== "driver" && role !== "staff") {
-                res.status(400).json({ message: "Invalid role" });
                 return;
             }
 
@@ -69,6 +64,13 @@ export const authController = {
             if (existingUser) {
                 res.status(400).json({ message: 'Email already exists' });
                 return;
+            }
+
+            if (role) {
+                if (role !== "user" && role !== "sub_admin" && role !== "super_admin" && role !== "driver" && role !== "staff") {
+                    res.status(400).json({ message: "Invalid role" });
+                    return;
+                }
             }
 
             const salt = await bcryptjs.genSalt(10);
@@ -281,15 +283,9 @@ export const authController = {
 
     resetPassword: async (req: Request, res: Response) => {
         try {
-            const { email, otp, newPassword } = req.body;
-            if (!email || !otp || !newPassword) {
-                res.status(400).json({ message: "Email, OTP, and new password are required" });
-                return;
-            }
-
-            const savedOtp = await redisController.getOtpFromStore(email);
-            if (!savedOtp || savedOtp !== otp) {
-                res.status(400).json({ message: "Invalid or expired OTP" });
+            const { email, newPassword } = req.body;
+            if (!email || !newPassword) {
+                res.status(400).json({ message: "Email and new password are required" });
                 return;
             }
 
