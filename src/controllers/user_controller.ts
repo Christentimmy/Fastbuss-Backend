@@ -71,21 +71,26 @@ export const userController = {
     updateProfile: async (req: Request, res: Response) => {
         try {
             const userId = res.locals.userId;
-            const { name, phone } = req.body;
+            const { name, email } = req.body;
 
             const user = await User.findById(userId);
             if (!user) {
                 return res.status(404).json({ message: "User not found" });
             }
 
-            if (name) user.name = name;
-            if (phone) user.phone = phone;
+            if (!name && !email) {
+                res.status(400).json({ message: "You Either Change Your Email or Name" });
+                return;
+            }
 
-            if (req.file) {
-                const result = await uploadToCloudinary(req.file, "profile_pictures") as { secure_url?: string, url?: string };
-                if (result) {
-                    user.profilePicture = result.secure_url ?? result.url!;
+            if (name) user.name = name;
+            if (email) {
+                const existEmail = await User.findOne({ email: email })
+                if (existEmail) {
+                    res.status(400).json({ message: "Email Already Exist" });
+                    return;
                 }
+                user.phone = email;
             }
 
             await user.save();
@@ -95,62 +100,6 @@ export const userController = {
             });
         } catch (error) {
             console.error("updateProfile error:", error);
-            res.status(500).json({ message: "Internal server error" });
-        }
-    },
-
-    changePassword: async (req: Request, res: Response) => {
-        try {
-            const userId = res.locals.userId;
-            const { currentPassword, newPassword } = req.body;
-
-            if (!currentPassword || !newPassword) {
-                return res.status(400).json({ message: "Current password and new password are required" });
-            }
-
-            const user = await User.findById(userId);
-            if (!user) {
-                return res.status(404).json({ message: "User not found" });
-            }
-
-            const isMatch = await bcrypt.compare(currentPassword, user.password);
-            if (!isMatch) {
-                return res.status(400).json({ message: "Current password is incorrect" });
-            }
-
-            const salt = await bcrypt.genSalt(10);
-            const hashedPassword = await bcrypt.hash(newPassword, salt);
-            user.password = hashedPassword;
-
-            await user.save();
-            res.status(200).json({ message: "Password changed successfully" });
-        } catch (error) {
-            console.error("changePassword error:", error);
-            res.status(500).json({ message: "Internal server error" });
-        }
-    },
-
-    // ==================== USER NOTIFICATIONS ====================
-    updateNotificationToken: async (req: Request, res: Response) => {
-        try {
-            const userId = res.locals.userId;
-            const { oneSignalId } = req.body;
-
-            if (!oneSignalId) {
-                return res.status(400).json({ message: "OneSignal ID is required" });
-            }
-
-            const user = await User.findById(userId);
-            if (!user) {
-                return res.status(404).json({ message: "User not found" });
-            }
-
-            user.one_signal_id = oneSignalId;
-            await user.save();
-
-            res.status(200).json({ message: "Notification token updated successfully" });
-        } catch (error) {
-            console.error("updateNotificationToken error:", error);
             res.status(500).json({ message: "Internal server error" });
         }
     },
@@ -498,7 +447,7 @@ export const userController = {
                 };
             });
 
-          res.status(200).json({ message: "Trip history fetched successfully", data: response });
+            res.status(200).json({ message: "Trip history fetched successfully", data: response });
         } catch (error) {
             console.error("getAllTripHistory error:", error);
             res.status(500).json({ message: "Internal server error" });

@@ -13,16 +13,13 @@ router.use(roleMiddleware(["user", "super_admin", "sub_admin"]));
 
 // ==================== USER PROFILE ROUTES ====================
 router.get("/get-user-details", userController.getProfile);
-router.put("/profile", uploadImage.single("profilePicture"), userController.updateProfile);
 router.get("/booked-trips", userController.getBookedTrips);
 router.get("/available-trips", userController.getAvailableTrips);
 router.get("/trip-history", userController.getAllTripHistory);
 router.post("/book-trip", userController.bookTrip);
 router.post("/cancel-trip", userController.cancelTrip);
+router.post("/update-profile", userController.updateProfile);
 router.get("/get-status", userController.getStatus);
-
-// ==================== USER NOTIFICATION ROUTES ====================
-router.put("/notification-token", userController.updateNotificationToken);
 
 // ==================== USER ACCOUNT ROUTES ====================
 router.delete("/account", userController.deleteAccount);
