@@ -13,9 +13,9 @@ import staffRoutes from "./routes/staff_routes";
 import { setupSocket } from "./config/socket";
 import driverRoutes from "./routes/driver_routes";
 import bookingRoutes from "./routes/booking_routes";
-import paymentRoutes from "./routes/payment_routes";
 import dashboardRoutes from "./routes/dashboard_routes";
 import paypalRoutes from "./routes/paypal_routes";
+import supportTicketRoutes from "./routes/support_ticket_routes";
 
 
 dotenv.config();
@@ -60,9 +60,9 @@ app.use('/api/v1/sub-company', subCompanyRoutes);
 app.use('/api/v1/sub-company/staff', staffRoutes);
 app.use('/api/v1/driver', driverRoutes);
 app.use('/api/v1/booking', bookingRoutes);
-app.use('/api/v1/payment', paymentRoutes);
 app.use('/api/v1/dashboard', dashboardRoutes);
 app.use('/api/v1/paypal', paypalRoutes);
+app.use('/api/v1/support', supportTicketRoutes);
 
 const server = http.createServer(app);
 setupSocket(server);

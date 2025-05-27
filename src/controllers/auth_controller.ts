@@ -96,14 +96,16 @@ export const authController = {
 
     login: async (req: Request, res: Response) => {
         try {
-            const { email, password } = req.body;
+            const { email, password, is_driver } = req.body;
 
             if (!email || !password) {
                 res.status(400).json({ message: "Email and Password are required" });
                 return;
             }
 
-            const user = await User.findOne({ email }) as IUser;
+            const query = is_driver ? { email: email, role: "driver" } : { email: email };
+
+            const user = await User.findOne(query);
             if (!user) {
                 res.status(404).json({ message: 'Invalid Credentials' });
                 return;
