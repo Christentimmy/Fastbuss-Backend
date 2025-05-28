@@ -28,8 +28,7 @@ app.use(helmet());
 app.use(cors({
   origin: (origin, callback) => {
     const allowedOrigins = [
-      // "http://localhost:5000",
-      // "http://localhost:5173",
+      process.env.LOCAL,
       process.env.ORIGIN,
     ];
     if (!origin || allowedOrigins.includes(origin)) {
