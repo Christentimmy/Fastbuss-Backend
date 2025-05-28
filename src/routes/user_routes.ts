@@ -8,7 +8,7 @@ import { roleMiddleware } from "../middlewares/role_middleware";
 const router = express.Router();
 router.use(tokenValidationMiddleware);
 router.use(statusChecker);
-router.use(roleMiddleware(["user", "super_admin", "sub_admin"]));
+router.use(roleMiddleware(["user", "super_admin", "sub_admin", "driver"]));
 
 
 // ==================== USER PROFILE ROUTES ====================
@@ -20,6 +20,10 @@ router.post("/book-trip", userController.bookTrip);
 router.post("/cancel-trip", userController.cancelTrip);
 router.post("/update-profile", userController.updateProfile);
 router.get("/get-status", userController.getStatus);
+router.get("/current-assigned-trip", userController.getMyCurrentAssignedTrip);
+router.post("/start-trip", userController.startTrip);
+router.post("/end-trip", userController.endTrip);
+router.get("/driver-trip-history", userController.driverTripHistory);
 
 // ==================== USER ACCOUNT ROUTES ====================
 router.delete("/delete-account", userController.deleteAccount);

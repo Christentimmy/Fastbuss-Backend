@@ -25,21 +25,15 @@ export const userController = {
     getStatus: async (req: Request, res: Response) => {
         try {
             const userId = res.locals.userId;
-            const user = await User.findById(userId).select("status email is_email_verified");
+            const user = await User.findById(userId).select("status email is_email_verified role");
 
             if (!user) {
                 return res.status(404).json({ message: "User not found" });
             }
 
-            const response = {
-                email: user.email,
-                status: user.status,
-                is_email_verified: user.is_email_verified,
-            }
-
             res.status(200).json({
                 message: "User status fetched successfully",
-                data: response,
+                data: user,
             });
         } catch (error) {
             console.error("getStatus error:", error);
@@ -466,6 +460,151 @@ export const userController = {
             res.status(500).json({ message: "Internal server error" });
         }
     },
+
+
+    // Driver
+    getMyCurrentAssignedTrip: async (req: Request, res: Response) => {
+        try {
+            const user = res.locals.user;
+            const trip = await Trip.findOne({ driverId: user._id, status: { $in: ["pending", "ongoing"] } }).populate<{ routeId: IRoute }>("routeId");
+            if (!trip) {
+                res.status(400).json({ message: "no active trip" });
+                return
+            }
+
+            const passengers = trip.seats.map(seat => seat.status == "booked");
+
+            const response = {
+                id: trip._id,
+                route: {
+                    origin: trip.routeId.origin,
+                    destination: trip.routeId.destination,
+                },
+                stops: trip.stops.length,
+                passengers: passengers.length,
+                departureTime: trip.departureTime,
+                arrivalTime: trip.arrivalTime,
+                routeName: trip.routeId.routeName,
+                status: trip.status,
+            }
+
+            res.status(200).json({ message: "Active trip found", data: response });
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ message: "internal server error" });
+        }
+    },
+
+    startTrip: async (req: Request, res: Response) => {
+        try {
+            const { tripId } = req.body;
+            if (!tripId) return res.status(400).json({ message: "Trip ID is required" });
+
+            const user = res.locals.user;
+            if (!user) return res.status(400).json({ message: "User not found" });
+
+            const trip = await Trip.findById(tripId);
+            if (!trip) return res.status(404).json({ message: "Trip not found" });
+
+            // Verify if the user is the assigned driver
+            if (trip.driverId.toString() !== user._id.toString()) {
+                return res.status(403).json({ message: "You are not authorized to start this trip" });
+            }
+
+            // Check if trip is in a valid state to be started
+            if (trip.status !== "pending") {
+                return res.status(400).json({
+                    message: `Cannot start trip. Current status is: ${trip.status}. Trip must be in 'pending' status to start.`
+                });
+            }
+
+            trip.status = "ongoing";
+            await trip.save();
+
+            res.status(200).json({
+                message: "Trip started successfully",
+                data: {
+                    tripId: trip._id,
+                    status: trip.status,
+                    departureTime: trip.departureTime,
+                    arrivalTime: trip.arrivalTime
+                }
+            });
+
+        } catch (error) {
+            console.error("startTrip error:", error);
+            res.status(500).json({ message: "Internal Server Error" });
+        }
+    },
+
+    endTrip: async (req: Request, res: Response) => {
+        try {
+            const { tripId } = req.body;
+            if (!tripId) return res.status(400).json({ message: "Trip ID is required" });
+
+            const user = res.locals.user;
+            if (!user) return res.status(400).json({ message: "User not found" });
+
+            const trip = await Trip.findById(tripId);
+            if (!trip) return res.status(404).json({ message: "Trip not found" });
+
+            // Verify if the user is the assigned driver
+            if (trip.driverId.toString() !== user._id.toString()) {
+                return res.status(403).json({ message: "You are not authorized to start this trip" });
+            }
+
+            // Check if trip is in a valid state to be started
+            if (trip.status !== "ongoing") {
+                return res.status(400).json({
+                    message: `Cannot end trip. Current status is: ${trip.status}. Trip must be in 'ongoing' status to start.`
+                });
+            }
+
+            trip.status = "completed";
+            await trip.save();
+
+            res.status(200).json({
+                message: "Trip ended successfully",
+                data: {
+                    tripId: trip._id,
+                    status: trip.status,
+                    departureTime: trip.departureTime,
+                    arrivalTime: trip.arrivalTime
+                }
+            });
+
+        } catch (error) {
+            console.error("endTrip error:", error);
+            res.status(500).json({ message: "Internal Server Error" });
+        }
+    },
+
+    driverTripHistory: async (req: Request, res: Response) => {
+        try {
+            const user = res.locals.user;
+            if (!user) return res.status(400).json({ message: "user required" });
+            const trips = await Trip.find({ driverId: user._id }).populate<{ routeId: IRoute, subCompanyId: ISubCompany, busId: IBus }>("routeId subCompanyId busId").select("-seats");
+            if (!trips) return res.status(404).json({ message: "Trips not founds" });
+
+            const response = trips.map(trip => ({
+                _id: trip._id,
+                origin: trip.routeId.origin,
+                destination: trip.routeId.destination,
+                seats: trip.seats,
+                status: trip.status,
+                departureDate: trip.departureTime,
+                arrivalDate: trip.arrivalTime,
+                busName: trip.busId.name,
+                busType: trip.busId.type,
+                companyName: trip.subCompanyId.companyName,
+                companyLogo: trip.subCompanyId.logo,
+            }));
+            res.status(200).json({ message: "All Trips", data: response });
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ message: "Internal Server Error" });
+        }
+    }
 
 };
 
