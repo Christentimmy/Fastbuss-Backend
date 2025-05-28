@@ -25,20 +25,20 @@ const port = process.env.PORT || 5000;
 
 
 app.use(helmet());
-app.use(cors({
-  origin: (origin, callback) => {
-    const allowedOrigins = [
-      process.env.LOCAL,
-      process.env.ORIGIN,
-    ];
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error("Not allowed by CORS"));
-    }
-  },
-  credentials: true
-}));
+// app.use(cors({
+//   origin: (origin, callback) => {
+//     const allowedOrigins = [
+//       process.env.LOCAL,
+//       process.env.ORIGIN,
+//     ];
+//     if (!origin || allowedOrigins.includes(origin)) {
+//       callback(null, true);
+//     } else {
+//       callback(new Error("Not allowed by CORS"));
+//     }
+//   },
+//   credentials: true
+// }));
 
 
 app.use(express.json());
