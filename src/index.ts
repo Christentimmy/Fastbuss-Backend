@@ -25,18 +25,12 @@ const port = process.env.PORT || 5000;
 
 
 app.use(helmet());
-// app.use(cors({
-//   origin: process.env.ORIGIN,
-//   credentials: true,
-// }));
-
-// const origin = process.env.ORIGIN;/
 app.use(cors({
   origin: (origin, callback) => {
     const allowedOrigins = [
-      "http://localhost:5000",
-      process.env.FRONTEND_URL,
-      origin?.toString(),
+      // "http://localhost:5000",
+      // "http://localhost:5173",
+      process.env.ORIGIN,
     ];
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);

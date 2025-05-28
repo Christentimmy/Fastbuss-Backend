@@ -10,5 +10,5 @@ export const paypalConfig = {
   baseUrl: PAYPAL_API_URL,
   clientId: process.env.PAYPAL_CLIENT_ID!,
   clientSecret: process.env.PAYPAL_CLIENT_SECRET!,
-  frontendUrl: process.env.FRONTEND_URL!
+  url: process.env.FRONTEND_URL!
 }; 

@@ -57,8 +57,8 @@ export class PayPalService {
             },
           ],
           application_context: {
-            return_url: `${paypalConfig.frontendUrl}/api/v1/paypal/payment-success?bookingId=${metadata.bookingId}`,
-            cancel_url: `${paypalConfig.frontendUrl}/api/v1/paypal/payment-cancelled?bookingId=${metadata.bookingId}`,
+            return_url: `${paypalConfig.url}/api/v1/paypal/payment-success?bookingId=${metadata.bookingId}`,
+            cancel_url: `${paypalConfig.url}/api/v1/paypal/payment-cancelled?bookingId=${metadata.bookingId}`,
             user_action: 'PAY_NOW',
             shipping_preference: 'NO_SHIPPING',
             landing_page: 'BILLING'
