@@ -14,6 +14,8 @@ import { ITrip } from "../types/trip_types";
 import { PayPalService } from '../services/paypal_service';
 import { seatController } from "./seat_controller";
 import mongoose, { Document } from "mongoose";
+import { sendTicketEmail } from "../services/email_service";
+import { IUser } from "../types/user_types";
 
 const paypalService = new PayPalService();
 
@@ -289,6 +291,43 @@ export const userController = {
         }
     },
 
+    resendTicket: async (req: Request, res: Response) => {
+        try {
+            const user = res.locals.user;
+            const { tripId, bookingId } = req.body;
+            if (!tripId || !bookingId) return res.status(400).json({ message: "TripId and bookingId" });
+
+            const trip = await Trip.findById(tripId).populate<{ subCompanyId: ISubCompany, driverId: IUser, routeId: IRoute, busId: IBus }>("subCompanyId driverId routeId busId");
+            if (!trip) return res.status(404).json({ message: "Trip not found" });
+
+            const exist = trip.seats.filter(seat => seat.userId === user._id && seat.status === "booked");
+            if (!exist) return res.status(400).json({ message: "You did not book trip" });
+
+            const booking = await Booking.findById(bookingId);
+            if (!booking) return res.status(400).json({ message: "Booking not found" });
+
+
+
+            const emailResponse = await sendTicketEmail(
+                user.email,
+                trip.subCompanyId.companyName,
+                trip as unknown as ITrip,
+                trip.routeId,
+                trip.busId,
+                trip.driverId.name,
+                booking.allPassengers,
+                booking.ticketNumber,
+            );
+
+            if (!emailResponse) return res.status(400).json({ message: "Failed to send email" });
+
+            res.status(200).json({ message: "Ticket Sent To Your Email" });
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ message: "Internal server error" });
+        }
+    },
+
     getBookedTrips: async (req: Request, res: Response) => {
         try {
             const userId = res.locals.userId;
@@ -438,7 +477,8 @@ export const userController = {
 
             const response = bookings.map(booking => {
                 return {
-                    _id: booking.trip._id,
+                    bookingId: booking._id,
+                    tripId: booking.trip._id,
                     origin: booking.trip.routeId.origin,
                     destination: booking.trip.routeId.destination,
                     price: booking.totalPrice,

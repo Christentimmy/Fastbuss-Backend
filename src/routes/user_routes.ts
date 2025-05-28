@@ -1,7 +1,6 @@
 import express from "express";
 import { userController } from "../controllers/user_controller";
 import tokenValidationMiddleware from "../middlewares/token_validator";
-import { uploadImage } from "../middlewares/upload_middleware";
 import statusChecker from "../middlewares/status_checker";
 import { roleMiddleware } from "../middlewares/role_middleware";
 
@@ -23,6 +22,7 @@ router.get("/get-status", userController.getStatus);
 router.get("/current-assigned-trip", userController.getMyCurrentAssignedTrip);
 router.post("/start-trip", userController.startTrip);
 router.post("/end-trip", userController.endTrip);
+router.post("/resend-ticket", userController.resendTicket);
 router.get("/driver-trip-history", userController.driverTripHistory);
 
 // ==================== USER ACCOUNT ROUTES ====================
