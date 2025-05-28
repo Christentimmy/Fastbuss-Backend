@@ -10,7 +10,7 @@ router.post('/send-otp', authController.sendOtp);
 router.post('/verify-otp', authController.verifyOtp);
 router.post('/delete-account', tokenValidationMiddleware, authController.deleteAccount);
 router.post('/logout', authController.logout);
-router.get("/check-token", authController.validateToken);
+router.post("/check-token", authController.validateToken);
 router.post('/change-password', tokenValidationMiddleware, authController.changePassword);
 router.post('/forgot-password', authController.forgotPassword);
 router.post('/reset-password', authController.resetPassword);
