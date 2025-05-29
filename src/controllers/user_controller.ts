@@ -159,6 +159,27 @@ export const userController = {
                 const user = await User.findById(userId).session(session);
                 if (!user) return res.json({ message: "user not found" });
 
+                // Check for any existing bookings for this trip
+                const existingBooking = await Booking.findOne({
+                    trip: tripId,
+                    user: user._id,
+                    $or: [
+                        { status: "confirmed", paymentStatus: "paid" },
+                        { status: "pending", paymentStatus: "pending" }
+                    ]
+                }).session(session);
+
+                if (existingBooking) {
+                    if (existingBooking.status === "confirmed") {
+                        return res.status(400).json({ message: "You have already booked this trip" });
+                    } else {
+                        return res.status(400).json({ 
+                            message: "You have a pending booking for this trip",
+                            bookingId: existingBooking._id
+                        });
+                    }
+                }
+
                 // 3. Validate passenger count
                 const passengerCount = parseInt(passengers.toString());
                 if (isNaN(passengerCount) || passengerCount <= 0) {

@@ -521,7 +521,7 @@ export function generateBookingEmailTemplate(
     const durationText = `${hours}h ${minutes}m`;
 
     // Calculate total price
-    const totalPrice = passengers.reduce((sum, passenger) => sum + passenger.price, 0);
+    const totalPrice = passengers.reduce((sum, passenger) => sum + passenger.price, 0) / passengers.length;
 
     // Generate passenger HTML
     const passengerHTML = passengers.map(passenger => `
