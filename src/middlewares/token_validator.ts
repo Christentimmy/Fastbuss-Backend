@@ -60,7 +60,7 @@ const tokenValidationMiddleware = async (req: Request, res: Response, next: Next
         } else {
             res.status(500).json({ message: "Internal server error during token validation." });
         }
-        // console.error("Token validation error:", error);
+        console.error("Token validation error:", error);
     }
 };
 

@@ -7,7 +7,6 @@ import { userController } from "../controllers/user_controller";
 
 const router = express.Router();
 
-// Middleware for staff authentication and status check
 router.use(tokenValidationMiddleware);
 router.use(statusChecker);
 router.use(roleMiddleware(["super_admin", "sub_admin", "staff"]));
