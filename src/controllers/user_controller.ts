@@ -16,6 +16,7 @@ import { seatController } from "./seat_controller";
 import mongoose, { Document } from "mongoose";
 import { sendTicketEmail } from "../services/email_service";
 import { IUser } from "../types/user_types";
+import { Bus } from "../models/bus_model";
 
 const paypalService = new PayPalService();
 
@@ -585,29 +586,32 @@ export const userController = {
             const user = res.locals.user;
             if (!user) return res.status(400).json({ message: "User not found" });
 
-            const trip = await Trip.findById(tripId);
+            const trip = await Trip.findById(tripId).populate<{ busId: IBus, driverId: IUser }>("busId driverId");
             if (!trip) return res.status(404).json({ message: "Trip not found" });
 
             // Verify if the user is the assigned driver
             if (trip.driverId.toString() !== user._id.toString()) {
-                return res.status(403).json({ message: "You are not authorized to start this trip" });
+                return res.status(403).json({ message: "You are not authorized to end this trip" });
             }
 
-            // Check if trip is in a valid state to be started
+            // Check if trip is in a valid state to be ended
             if (trip.status !== "ongoing") {
                 return res.status(400).json({
-                    message: `Cannot end trip. Current status is: ${trip.status}. Trip must be in 'ongoing' status to start.`
+                    message: `Cannot end trip. Current status is: ${trip.status}. Trip must be in 'ongoing' status to end.`
                 });
             }
 
-            trip.status = "completed";
-            await trip.save();
+            await Promise.all([
+                Trip.findByIdAndUpdate(tripId, { status: "completed" }),
+                User.findByIdAndUpdate(trip.driverId._id, { status: "inactive" }),
+                Bus.findByIdAndUpdate(trip.busId._id, { status: "inactive" })
+            ]);
 
             res.status(200).json({
                 message: "Trip ended successfully",
                 data: {
                     tripId: trip._id,
-                    status: trip.status,
+                    status: "completed",
                     departureTime: trip.departureTime,
                     arrivalTime: trip.arrivalTime
                 }
