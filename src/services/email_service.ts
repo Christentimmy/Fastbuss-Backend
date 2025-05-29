@@ -1,9 +1,9 @@
 import dotenv from "dotenv";
 import { generateBookingEmailTemplate, generateEmailOtpTemplate, generateEmailTemplate, generateAlertEmailTemplate } from "./email_template";
 import { Resend } from "resend";
-import { ITrip } from "@/types/trip_types";
-import { IRoute } from "@/types/route_types";
-import { IBus } from "@/types/bus_types";
+import { ITrip } from "../types/trip_types";
+import { IRoute } from "../types/route_types";
+import { IBus } from "../types/bus_types";
 import { generatePDF } from "../utils/convert_html_to_image";
 import { Types } from "mongoose";
 
