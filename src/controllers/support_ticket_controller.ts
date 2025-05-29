@@ -138,6 +138,7 @@ export const supportTicketController = {
     updateStatus: async (req: Request, res: Response) => {
         try {
             const { status, ticketId, priority } = req.body;
+            console.log(req.body);
             if (!ticketId) {
                 res.status(400).json({ message: "TicketId required" });
                 return;
