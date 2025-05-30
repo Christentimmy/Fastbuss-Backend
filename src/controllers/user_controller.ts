@@ -420,12 +420,28 @@ export const userController = {
             const sanitizedDestination = escapeRegex(destination as string);
             const sanitizedOrigin = escapeRegex(origin as string);
 
+            // Split the locations into parts and create a more flexible search
+            const destinationParts = (destination as string).split(',').map(part => part.trim());
+            const originParts = (origin as string).split(',').map(part => part.trim());
+
+            // Create regex patterns for each part
+            const destinationPattern = destinationParts.map(part => escapeRegex(part)).join('|');
+            const originPattern = originParts.map(part => escapeRegex(part)).join('|');
+
             const matchedRoutes = await Route.find({
-                origin: { $regex: sanitizedOrigin, $options: "i" },
-                destination: { $regex: sanitizedDestination, $options: "i" },
+                $or: [
+                    {
+                        origin: { $regex: originPattern, $options: "i" },
+                        destination: { $regex: destinationPattern, $options: "i" }
+                    },
+                    {
+                        origin: { $regex: sanitizedOrigin, $options: "i" },
+                        destination: { $regex: sanitizedDestination, $options: "i" }
+                    }
+                ]
             }).distinct("_id");
 
-            if (!matchedRoutes) {
+            if (!matchedRoutes || matchedRoutes.length === 0) {
                 return res.status(404).json({ message: "No matching route found" });
             }
 
