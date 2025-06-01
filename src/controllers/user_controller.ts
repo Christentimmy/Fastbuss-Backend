@@ -8,7 +8,7 @@ import { Route } from "../models/route_model";
 import { IRoute } from "../types/route_types";
 import { IBus } from "../types/bus_types";
 import { ISubCompany } from "../types/sub_company_types";
-import { Booking } from "../models/booking_model";
+import { Booking, IBooking } from "../models/booking_model";
 import { generateTicketNumber } from "../utils/generate_booking_number";
 import { ITrip } from "../types/trip_types";
 import { PayPalService } from '../services/paypal_service';
@@ -149,10 +149,10 @@ export const userController = {
             const result = await session.withTransaction(async () => {
                 // 1. Get user ID and validate input
                 const userId = res.locals.userId;
-                const { tripId, passengers } = req.body;
+                const { tripId, passengers, paymentMethod } = req.body;
 
-                if (!tripId || !passengers || !Array.isArray(passengers)) {
-                    return res.status(400).json({ message: "Trip ID and passenger list (array of objects with name and type) are required" });
+                if (!tripId || !passengers || !Array.isArray(passengers) || !paymentMethod) {
+                    return res.status(400).json({ message: "Trip ID and passenger list (array of objects with name and type) and payment method are required" });
                 }
 
                 if (!passengers.every(passenger =>
@@ -252,58 +252,85 @@ export const userController = {
 
                 const [bookedSeatNumbers, allPassengers] = reservationResult;
 
-                // 6. Create booking
-                const booking = new Booking({
-                    user: userId,
-                    trip: trip._id,
-                    seats: bookedSeatNumbers,
-                    totalPrice,
-                    status: "pending",
-                    paymentStatus: "pending",
-                    ticketNumber: generateTicketNumber(),
-                    bookingDate: new Date(),
-                    allPassengers: allPassengers,
-                });
+                let booking: IBooking;
 
-                await booking.save({ session });
+                if (paymentMethod === "cash") {
+                    booking = new Booking({
+                        user: userId,
+                        trip: trip._id,
+                        seats: bookedSeatNumbers,
+                        totalPrice, 
+                        status: "confirmed",
+                        paymentMethod: paymentMethod,
+                        paymentStatus: "paid",
+                        ticketNumber: generateTicketNumber(),
+                        bookingDate: new Date(),
+                        allPassengers: allPassengers,
+                    });
 
-                // 7. Create payment
-                const payment = await paypalService.createPayment(
-                    totalPrice,
-                    `Booking for ${trip.routeId.origin} to ${trip.routeId.destination}`,
-                    { bookingId: booking._id.toString() }
-                );
+                    await booking.save({ session });
+                    await session.commitTransaction();  
+                    console.log("Here is the booking", booking._id);   
 
-                if (!payment) {
-                    await session.abortTransaction();
-                    return res.status(400).json({ message: "Failed to create payment" });
+                    await seatController.markSeatsAsBooked(booking._id);
+
+                } else {
+                    booking = new Booking({
+                        user: userId,
+                        trip: trip._id,
+                        seats: bookedSeatNumbers,
+                        totalPrice,
+                        status: "pending",
+                        paymentMethod: paymentMethod,
+                        paymentStatus: "pending",
+                        ticketNumber: generateTicketNumber(),
+                        bookingDate: new Date(),
+                        allPassengers: allPassengers,
+                    });
+
+                    await booking.save({ session });
+
+                    // 7. Create payment
+                    const payment = await paypalService.createPayment(
+                        totalPrice,
+                        `Booking for ${trip.routeId.origin} to ${trip.routeId.destination}`,
+                        { bookingId: booking._id.toString() }
+                    );
+
+                    if (!payment) {
+                        await session.abortTransaction();
+                        return res.status(400).json({ message: "Failed to create payment" });
+                    }
+
+                    // Update booking with PayPal order ID
+                    booking.orderId = payment.orderId;
+                    await booking.save({ session });
+                    await session.commitTransaction();  
+
+                    // Schedule seat release after transaction commits
+                    process.nextTick(() => {
+                        seatController.scheduleSeatRelease(booking._id);
+                    });
+
+                    return {
+                        message: "Trip booked successfully",
+                        data: {
+                            ticketNumber: booking.ticketNumber,
+                            totalSeats: bookedSeatNumbers.length,
+                            departure: trip.departureTime,
+                            arrival: trip.arrivalTime,
+                            bookedSeats: bookedSeatNumbers,
+                            totalPrice,
+                            approvalUrl: payment.approvalUrl,
+                            orderId: payment.orderId,
+                        }
+                    };
                 }
 
-                // Update booking with PayPal order ID
-                booking.orderId = payment.orderId;
-                await booking.save({ session });
 
-                // Schedule seat release after transaction commits
-                process.nextTick(() => {
-                    seatController.scheduleSeatRelease(booking._id);
-                });
-
-                return {
-                    message: "Trip booked successfully",
-                    data: {
-                        ticketNumber: booking.ticketNumber,
-                        totalSeats: bookedSeatNumbers.length,
-                        departure: trip.departureTime,
-                        arrival: trip.arrivalTime,
-                        bookedSeats: bookedSeatNumbers,
-                        totalPrice,
-                        approvalUrl: payment.approvalUrl,
-                        orderId: payment.orderId,
-                    }
-                };
             });
 
-            res.status(200).json(result);
+            res.status(200).json({ message: "Trip booked successfully" });
 
         } catch (error) {
             console.error("bookTrip error:", error);

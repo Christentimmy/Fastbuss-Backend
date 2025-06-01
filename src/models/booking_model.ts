@@ -35,7 +35,7 @@ const BookingSchema = new Schema<IBooking>({
         enum: ["pending", "paid", "failed", "refunded", "cancelled"],
         default: "pending"
     },
-    paymentMethod: { type: String },
+    paymentMethod: { type: String, enum: ["paypal", "cash"] },
     paymentId: { type: String },
     bookingDate: { type: Date, default: Date.now },
     cancellationDate: { type: Date },
