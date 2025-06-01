@@ -37,17 +37,17 @@ export class PayPalService {
                   quantity: 1,
                   description: description,
                   unit_amount: {
-                    currency_code: 'EUR',
+                    currency_code: 'USD',
                     value: amount.toString()
                   },
                 }
               ],
               amount: {
-                currency_code: 'EUR',
+                currency_code: 'USD',
                 value: amount.toString(),
                 breakdown: {
                   item_total: {
-                    currency_code: 'EUR',
+                    currency_code: 'USD',
                     value: amount.toString()
                   }
                 }

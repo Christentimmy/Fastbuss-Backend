@@ -6,7 +6,8 @@ export interface IRoute extends Document {
     origin: string;
     destination: string;
     distance: number;
-    price: number;
+    childPrice: number;
+    adultPrice: number;
     status: "active" | "inactive";
     subCompanyId: Types.ObjectId;
     waypoints: { latitude: number; longitude: number }[];

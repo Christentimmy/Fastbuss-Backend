@@ -912,7 +912,8 @@ export const subCompanyController = {
                 departureTime: trip.departureTime,
                 arrivalTime: trip.arrivalTime,
                 distance: trip.routeId.distance,
-                price: trip.routeId.price,
+                adultPrice: trip.routeId.adultPrice,
+                childPrice: trip.routeId.childPrice,
                 status: trip.status,
                 routeName: trip.routeId.routeName,
                 origin: trip.routeId.origin,
@@ -930,11 +931,11 @@ export const subCompanyController = {
     // ==================== ROUTE MANAGEMENT ====================
     createRoute: async (req: Request, res: Response) => {
         try {
-            const { routeName, origin, destination, distance, price, waypoints } = req.body;
+            const { routeName, origin, destination, distance, adultPrice, childPrice, waypoints } = req.body;
             const subCompanyId = res.locals.user.subCompanyId;
 
-            if (!routeName || !origin || !destination || !price || !distance) {
-                return res.status(400).json({ message: "Route name, origin, destination, distance, and price are required" });
+            if (!routeName || !origin || !destination || !adultPrice || !childPrice || !distance) {
+                return res.status(400).json({ message: "Route name, origin, destination, distance, adult price, and child price are required" });
             }
 
             const existingRoute = await Route.findOne({
@@ -951,7 +952,8 @@ export const subCompanyController = {
                 origin,
                 destination,
                 distance,
-                price,
+                adultPrice,
+                childPrice,
                 subCompanyId,
                 status: "active"
             });
@@ -963,7 +965,8 @@ export const subCompanyController = {
                     routeName,
                     origin,
                     destination,
-                    price,
+                    adultPrice,
+                    childPrice, 
                     distance,
                     waypoints,
                 }
@@ -1040,7 +1043,8 @@ export const subCompanyController = {
                 departureTime: new Date(departureTime),
                 arrivalTime: new Date(arrivalTime),
                 distance: route.distance,
-                price: route.price,
+                adultPrice: route.adultPrice,
+                childPrice: route.childPrice,
                 subCompanyId,
                 status: "pending",
                 seats,
@@ -1093,7 +1097,7 @@ export const subCompanyController = {
                 return res.status(400).json({ message: "Route ID is required" });
             }
 
-            const { routeName, origin, destination, distance, price, status } = req.body;
+            const { routeName, origin, destination, distance, adultPrice, childPrice, status } = req.body;
             const subCompanyId = res.locals.user.subCompanyId;
 
             const route = await Route.findOne({ _id: routeId, subCompanyId });
@@ -1117,7 +1121,8 @@ export const subCompanyController = {
             if (origin) route.origin = origin;
             if (destination) route.destination = destination;
             if (distance !== undefined) route.distance = distance;
-            if (price !== undefined) route.price = price;
+            if (adultPrice !== undefined) route.adultPrice = adultPrice;
+            if (childPrice !== undefined) route.childPrice = childPrice;
             if (status) route.status = status;
 
             await route.save();
@@ -1310,7 +1315,8 @@ export const subCompanyController = {
                     origin: trip.routeId.origin,
                     destination: trip.routeId.destination,
                     distance: trip.routeId.distance,
-                    price: trip.routeId.price
+                    adultPrice: trip.routeId.adultPrice,
+                    childPrice: trip.routeId.childPrice
                 },
                 bus: {
                     name: trip.busId.name,

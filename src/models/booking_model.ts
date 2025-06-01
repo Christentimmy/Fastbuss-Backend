@@ -45,7 +45,7 @@ const BookingSchema = new Schema<IBooking>({
         name: { type: String, required: true },
         seat: { type: String, required: true },
         price: { type: Number, required: true },
-        type: { type: String, enum: ["main", "guest"], default: "main" },
+        type: { type: String, enum: ["adult", "child"], default: "adult" },
         seatId: { type: Schema.Types.ObjectId, default: null },
     }],
     orderId: { type: String, default: null },

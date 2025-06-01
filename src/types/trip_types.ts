@@ -29,7 +29,7 @@ export interface ISeat {
   updatedAt: Date | null;
   passengerName?: string | null; 
   reservedAt: Date | null,
-  passengerType: "main" | "guest" | null,
+  passengerType: "adult" | "child" | null,
 }
 
 

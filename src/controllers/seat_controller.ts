@@ -59,7 +59,7 @@ export const seatController = {
                 allPassengers.push({
                     name: passenger.name,
                     seat: seat.seatNumber,
-                    price: basePrice,
+                    price: passenger.price,
                     type: passenger.type,
                     seatId: seat._id
                 });
@@ -160,7 +160,7 @@ export const seatController = {
                         status: "booked",
                         userId: booking.user._id as Types.ObjectId,
                         passengerName: passenger.name,
-                        passengerType: passenger.type as "main" | "guest",
+                        passengerType: passenger.type as "adult" | "child",
                         updatedAt: new Date()
                     };
                 }

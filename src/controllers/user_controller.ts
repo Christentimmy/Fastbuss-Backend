@@ -150,10 +150,20 @@ export const userController = {
                 // 1. Get user ID and validate input
                 const userId = res.locals.userId;
                 const { tripId, passengers } = req.body;
-                if (!tripId || !passengers) {
-                    res.status(400).json({ message: "Trip ID and passenger count are required" })
-                    return;
+
+                if (!tripId || !passengers || !Array.isArray(passengers)) {
+                    return res.status(400).json({ message: "Trip ID and passenger list (array of objects with name and type) are required" });
                 }
+
+                if (!passengers.every(passenger =>
+                    typeof passenger === 'object' &&
+                    passenger !== null &&
+                    typeof passenger.name === 'string' &&
+                    ['adult', 'child'].includes(passenger.type)
+                )) {
+                    return res.status(400).json({ message: "All passengers must be objects with name (string) and type (adult/child)" });
+                }
+
 
                 // 2. Check if user exists (within transaction)
                 const user = await User.findById(userId).session(session);
@@ -173,7 +183,7 @@ export const userController = {
                     if (existingBooking.status === "confirmed") {
                         return res.status(400).json({ message: "You have already booked this trip" });
                     } else {
-                        return res.status(400).json({ 
+                        return res.status(400).json({
                             message: "You have a pending booking for this trip",
                             bookingId: existingBooking._id
                         });
@@ -181,7 +191,7 @@ export const userController = {
                 }
 
                 // 3. Validate passenger count
-                const passengerCount = parseInt(passengers.toString());
+                const passengerCount = passengers.length;
                 if (isNaN(passengerCount) || passengerCount <= 0) {
                     res.json({ message: "Invalid passenger count" });
                     return;
@@ -212,14 +222,19 @@ export const userController = {
                 }
 
                 // 5. Reserve seats atomically
-                const pricePerSeat = trip.routeId.price;
-                const totalPrice = passengerCount * pricePerSeat;
+                const adultPrice = trip.routeId.adultPrice;
+                const childPrice = trip.routeId.childPrice;
+                let totalPrice = 0;
+                for (let i = 0; i < passengerCount; i++) {
+                    totalPrice += passengers[i].type === "adult" ? adultPrice : childPrice;
+                }
 
                 const passengersList = [];
                 for (let i = 0; i < passengerCount; i++) {
                     passengersList.push({
-                        name: i === 0 ? user.name : `Guest ${i} ${user.name}`,
-                        type: i === 0 ? "main" : "guest"
+                        name: passengers[i].name,
+                        type: passengers[i].type,
+                        price: passengers[i].type === "adult" ? adultPrice : childPrice,
                     });
                 }
 
@@ -463,7 +478,8 @@ export const userController = {
                     origin: trip.routeId.origin,
                     destination: trip.routeId.destination,
                     distance: trip.routeId.distance,
-                    price: trip.routeId.price,
+                    adultPrice: trip.routeId.adultPrice,
+                    childPrice: trip.routeId.childPrice,
                 },
                 departureTime: trip.departureTime,
                 arrivalTime: trip.arrivalTime,

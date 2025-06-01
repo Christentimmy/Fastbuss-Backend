@@ -60,7 +60,7 @@ export interface Passenger {
     name: string;
     seat: string;
     price: number;
-    type?: "main" | "guest",
+    type?: "adult" | "child",
     seatId? : Types.ObjectId | null,
 }
 

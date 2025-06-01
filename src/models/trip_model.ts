@@ -22,7 +22,7 @@ const tripSchema = new mongoose.Schema<ITrip>({
         updatedAt: { type: Date },
         reservedAt: { type: Date },
         passengerName: { type: String },
-        passengerType: { type: String, enum: ["main", "guest", null], default: null }
+        passengerType: { type: String, enum: ["adult", "child", null], default: null }
     }]
 }, { timestamps: true });
 
