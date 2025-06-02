@@ -507,11 +507,13 @@ export function generateBookingEmailTemplate(
     });
     const departureTime = new Date(trip.departureTime).toLocaleTimeString('en-US', { 
         hour: '2-digit', 
-        minute: '2-digit' 
+        minute: '2-digit',
+        hour12: false
     });
     const arrivalTime = new Date(trip.arrivalTime).toLocaleTimeString('en-US', { 
         hour: '2-digit', 
-        minute: '2-digit' 
+        minute: '2-digit',
+        hour12: false
     });
 
     // Calculate duration
