@@ -150,7 +150,6 @@ export const userController = {
                 // 1. Get user ID and validate input
                 const userId = res.locals.userId;
                 const { tripId, passengers, paymentMethod } = req.body;
-                console.log("Payment Method", paymentMethod);
 
                 if (!tripId || !passengers || !Array.isArray(passengers) || !paymentMethod) {
                     return { status: 400, message: "Trip ID and passenger list (array of objects with name and type) and payment method are required" };
