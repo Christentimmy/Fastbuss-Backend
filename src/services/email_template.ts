@@ -499,6 +499,13 @@ export function generateBookingEmailTemplate(
     passengers: Passenger[],
     ticketNumber: string
 ) {
+    // Helper function to truncate long text
+    const truncateText = (text: string, maxWords: number = 3) => {
+        const words = text.split(' ');
+        if (words.length <= maxWords) return text;
+        return words.slice(0, maxWords).join(' ') + '...';
+    };
+
     // Format dates
     const departureDate = new Date(trip.departureTime).toLocaleDateString('en-US', { 
         year: 'numeric', 
@@ -654,8 +661,8 @@ export function generateBookingEmailTemplate(
       <div class="flex justify-between items-start mb-4">
           <div>
               <p class="text-blue-400 text-xs uppercase font-medium">From</p>
-                  <h3 class="text-lg font-bold text-blue-900">${route.origin}</h3>
-                  <p class="text-sm text-blue-600">${trip.departureBusStation}</p>
+                  <h3 class="text-lg font-bold text-blue-900">${truncateText(route.origin)}</h3>
+                  <p class="text-sm text-blue-600">${truncateText(trip.departureBusStation)}</p>
           </div>
           
           <div class="text-center">
@@ -667,8 +674,8 @@ export function generateBookingEmailTemplate(
           
           <div class="text-right">
               <p class="text-blue-400 text-xs uppercase font-medium">To</p>
-                  <h3 class="text-lg font-bold text-blue-900">${route.destination}</h3>
-                  <p class="text-sm text-blue-600">${trip.arrivalBusStation}</p>
+                  <h3 class="text-lg font-bold text-blue-900">${truncateText(route.destination)}</h3>
+                  <p class="text-sm text-blue-600">${truncateText(trip.arrivalBusStation)}</p>
           </div>
       </div>
       
