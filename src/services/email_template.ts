@@ -655,6 +655,7 @@ export function generateBookingEmailTemplate(
           <div>
               <p class="text-blue-400 text-xs uppercase font-medium">From</p>
                   <h3 class="text-lg font-bold text-blue-900">${route.origin}</h3>
+                  <p class="text-sm text-blue-600">${trip.departureBusStation}</p>
           </div>
           
           <div class="text-center">
@@ -667,6 +668,7 @@ export function generateBookingEmailTemplate(
           <div class="text-right">
               <p class="text-blue-400 text-xs uppercase font-medium">To</p>
                   <h3 class="text-lg font-bold text-blue-900">${route.destination}</h3>
+                  <p class="text-sm text-blue-600">${trip.arrivalBusStation}</p>
           </div>
       </div>
       

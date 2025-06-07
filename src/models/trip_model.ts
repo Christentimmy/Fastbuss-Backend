@@ -3,6 +3,8 @@ import { ITrip } from "../types/trip_types";
 
 const tripSchema = new mongoose.Schema<ITrip>({
     routeId: { type: mongoose.Schema.Types.ObjectId, ref: "Route" },
+    departureBusStation: { type: String, required: true },
+    arrivalBusStation: { type: String, required: true },
     busId: { type: mongoose.Schema.Types.ObjectId, ref: "Bus" },
     driverId: { type: mongoose.Schema.Types.ObjectId, ref: "Users" },
     departureTime: { type: Date, required: true },
@@ -29,3 +31,4 @@ const tripSchema = new mongoose.Schema<ITrip>({
 const Trip = mongoose.model<ITrip>("Trip", tripSchema);
 
 export default Trip;
+

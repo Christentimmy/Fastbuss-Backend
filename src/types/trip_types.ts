@@ -3,6 +3,8 @@ import { Document, Types } from "mongoose";
 
 export interface ITrip extends Document {
   routeId: Types.ObjectId;
+  departureBusStation: string;
+  arrivalBusStation: string;
   busId: Types.ObjectId;
   driverId: Types.ObjectId;
   departureTime: Date;

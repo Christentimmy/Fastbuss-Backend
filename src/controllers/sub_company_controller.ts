@@ -372,7 +372,6 @@ export const subCompanyController = {
     getMyBuses: async (_req: Request, res: Response) => {
         try {
             const subCompanyId = res.locals.user.subCompanyId;
-            console.log(subCompanyId);
 
             const buses = await Bus.find({ subCompany: subCompanyId })
                 .select("name status currentLocation createdAt updatedAt")
@@ -979,10 +978,10 @@ export const subCompanyController = {
 
     createRouteSchedule: async (req: Request, res: Response) => {
         try {
-            const { routeId, driverId, departureTime, arrivalTime, stops } = req.body;
+            const { routeId, driverId, departureTime, arrivalTime, stops, departureBusStation, arrivalBusStation } = req.body;
             const subCompanyId = res.locals.user.subCompanyId;
 
-            if (!routeId || !driverId || !departureTime || !arrivalTime) {
+            if (!routeId || !driverId || !departureTime || !arrivalTime || !departureBusStation || !arrivalBusStation) {
                 return res.status(400).json({ message: "All fields are required" });
             }
 
@@ -1038,6 +1037,8 @@ export const subCompanyController = {
 
             const schedule = await Trip.create({
                 routeId: route._id,
+                departureBusStation,
+                arrivalBusStation,
                 busId: bus._id,
                 driverId: driver._id,
                 departureTime: new Date(departureTime),
