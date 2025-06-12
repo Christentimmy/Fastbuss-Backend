@@ -531,7 +531,7 @@ export const userController = {
                     busType: trip.busId.type,
                     busName: trip.busId.name,
                 },
-                stops: trip.stops.length,
+                stops: trip.stops,
                 seats: trip.seats.filter(seat => seat.status === "available").length,
             }));
 
